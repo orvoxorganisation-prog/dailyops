@@ -1,0 +1,241 @@
+// DailyOps — production schema (PostgreSQL via Prisma)
+// Single company. No seed/mock users — accounts are created through signup only.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+}
+
+enum GoalStatus {
+  ON_TRACK
+  AT_RISK
+  BEHIND
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ProofType {
+  IMAGE
+  DOCUMENT
+  SCREENSHOT
+  LINK
+  GITHUB
+  LOOM
+}
+
+enum Mood {
+  GREAT
+  GOOD
+  OK
+  ROUGH
+}
+
+enum ReportStatus {
+  SUBMITTED
+  FLAGGED
+}
+
+enum Severity {
+  INFO
+  WARNING
+  CRITICAL
+  SUCCESS
+}
+
+enum NotificationType {
+  REPORT_MISSING
+  GOAL_DEADLINE
+  TASK_OVERDUE
+  SOP_VIOLATION
+  TASK_BLOCKED
+  GOAL_AT_RISK
+  REPORT_FLAGGED
+  PRAISE
+  NUDGE
+  ACCOUNT
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(EMPLOYEE)
+  title        String?
+  team         String?
+  hue          String    @default("teal")
+  active       Boolean   @default(true)
+  deletedAt    DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  reports        DailyReport[]
+  tasks          Task[]
+  goals          WeeklyGoal[]
+  proofs         ProofItem[]
+  progressNotes  ProgressNote[]
+  notifications  Notification[]  @relation("Recipient")
+  resetTokens    PasswordResetToken[]
+  auditPerformed AuditLog[]      @relation("Actor")
+  auditTargeted  AuditLog[]      @relation("Target")
+
+  @@index([role, active])
+}
+
+model DailyReport {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime     @db.Date
+  completedToday  String
+  progressMade    String
+  plannedTomorrow String
+  blockers        String
+  hasBlockers     Boolean      @default(false)
+  hoursWorked     Float
+  sopConfirmed    Boolean      @default(false)
+  sopFollowed     Boolean      @default(false)
+  flagged         Boolean      @default(false)
+  flagReason      String?
+  status          ReportStatus @default(SUBMITTED)
+  mood            Mood?
+  submittedAt     DateTime     @default(now())
+  proof           ProofItem[]
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+model Task {
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  status        TaskStatus     @default(NOT_STARTED)
+  priority      Priority       @default(MEDIUM)
+  dueDate       DateTime?      @db.Date
+  completedAt   DateTime?
+  goalId        String?
+  goal          WeeklyGoal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  progressNotes ProgressNote[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([userId, status])
+}
+
+model ProgressNote {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model WeeklyGoal {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  metricLabel String
+  target      Int
+  current     Int        @default(0)
+  weekOf      DateTime   @db.Date
+  deadline    DateTime   @db.Date
+  status      GoalStatus @default(ON_TRACK)
+  tasks       Task[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([userId, weekOf])
+}
+
+model ProofItem {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportId  String?
+  report    DailyReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  type      ProofType
+  label     String
+  url       String
+  createdAt DateTime     @default(now())
+
+  @@index([userId])
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  recipientId   String
+  recipient     User             @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  audience      String // "employee" | "admin"
+  type          NotificationType
+  title         String
+  message       String
+  severity      Severity         @default(INFO)
+  read          Boolean          @default(false)
+  relatedUserId String?
+  createdAt     DateTime         @default(now())
+
+  @@index([recipientId, read])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  action       String
+  actorId      String?
+  actor        User?    @relation("Actor", fields: [actorId], references: [id], onDelete: SetNull)
+  targetUserId String?
+  target       User?    @relation("Target", fields: [targetUserId], references: [id], onDelete: SetNull)
+  entity       String?
+  entityId     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model CompanySettings {
+  id             String   @id @default(cuid())
+  name           String   @default("Your Company")
+  tagline        String?
+  workdayEndHour Int      @default(18)
+  timezone       String   @default("UTC")
+  requireProof   Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+}

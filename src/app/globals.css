@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 48 30% 98%;
+    --foreground: 200 24% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 200 24% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 24% 12%;
+    --primary: 176 64% 22%;
+    --primary-foreground: 160 40% 98%;
+    --secondary: 45 16% 93.5%;
+    --secondary-foreground: 200 22% 20%;
+    --muted: 45 16% 95%;
+    --muted-foreground: 215 14% 38%;
+    --accent: 174 46% 91%;
+    --accent-foreground: 176 64% 17%;
+    --destructive: 352 70% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 45 14% 88.5%;
+    --input: 45 14% 87%;
+    --ring: 176 60% 30%;
+    --radius: 0.65rem;
+  }
+
+  .dark {
+    --background: 200 26% 6.5%;
+    --foreground: 45 22% 95%;
+    --card: 200 22% 9.5%;
+    --card-foreground: 45 22% 95%;
+    --popover: 200 24% 9%;
+    --popover-foreground: 45 22% 95%;
+    --primary: 172 62% 41%;
+    --primary-foreground: 200 32% 6%;
+    --secondary: 200 16% 16%;
+    --secondary-foreground: 45 20% 92%;
+    --muted: 200 16% 14.5%;
+    --muted-foreground: 210 14% 66%;
+    --accent: 200 20% 18%;
+    --accent-foreground: 172 58% 68%;
+    --destructive: 352 62% 53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 200 14% 17.5%;
+    --input: 200 14% 20%;
+    --ring: 172 62% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv05", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer components {
+  .grid-dots {
+    background-image: radial-gradient(hsl(var(--foreground) / 0.05) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  .scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-rise {
+    animation: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
