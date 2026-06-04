@@ -134,6 +134,12 @@ export function LineChart({
   showArea?: boolean;
 }) {
   const gid = safeId(useId());
+  if (!points.length)
+    return (
+      <div style={{ height }} className="flex items-center justify-center text-xs text-muted-foreground">
+        Not enough data yet
+      </div>
+    );
   const W = 640;
   const H = height;
   const padL = 34;
@@ -201,6 +207,12 @@ export function BarChart({
   yMax?: number;
   yUnit?: string;
 }) {
+  if (!data.length)
+    return (
+      <div style={{ height }} className="flex items-center justify-center text-xs text-muted-foreground">
+        Not enough data yet
+      </div>
+    );
   const W = 640;
   const H = height;
   const padL = 30;

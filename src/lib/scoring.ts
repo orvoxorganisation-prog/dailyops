@@ -75,19 +75,14 @@ function goalCompletionForUser(ds: Dataset, id: string): number {
 function userDayScores(ds: Dataset, id: string, dates: string[]): number[] {
   const byDate = new Map(uReports(ds, id).map((r) => [r.date, r]));
   const goalsPct = goalCompletionForUser(ds, id);
-  let last = 45;
+  // Real data only — a day with no report scores 0. (Previously this synthesized
+  // a declining curve for empty days, which showed up as fake historical data.)
   return dates.map((d) => {
     const rep = byDate.get(d);
-    if (rep) {
-      const v = clamp(
-        46 + (rep.hoursWorked - 6) * 5 + (rep.sopFollowed ? 12 : -16) + (rep.hasBlockers ? -10 : 6) + goalsPct * 0.1
-      );
-      last = v;
-      return v;
-    }
-    if (!isWeekday(parseISO(d))) return last;
-    last = clamp(last - 18);
-    return last;
+    if (!rep) return 0;
+    return clamp(
+      46 + (rep.hoursWorked - 6) * 5 + (rep.sopFollowed ? 12 : -16) + (rep.hasBlockers ? -10 : 6) + goalsPct * 0.1
+    );
   });
 }
 
@@ -205,21 +200,26 @@ export interface TrendPoint {
 
 export function missedReportTrend(ds: Dataset, days = 14): TrendPoint[] {
   const team = reportingUsers(ds);
-  const teamIds = new Set(team.map((u) => u.id));
   return lastNDates(days).map((d) => {
     const weekday = isWeekday(parseISO(d));
-    const expected = weekday ? team.length : 0;
-    const submitted = ds.reports.filter((r) => r.date === d && teamIds.has(r.userId)).length;
-    return { date: d, value: expected ? clamp(pct(submitted, expected)) : 100, submitted, expected };
+    // Only count members who already existed on that date — no fake "missed
+    // reports" for days before the team (or a given member) was created.
+    const existing = team.filter((u) => u.createdAt.slice(0, 10) <= d);
+    const existingIds = new Set(existing.map((u) => u.id));
+    const expected = weekday ? existing.length : 0;
+    const submitted = ds.reports.filter((r) => r.date === d && existingIds.has(r.userId)).length;
+    return { date: d, value: expected ? clamp(pct(submitted, expected)) : 0, submitted, expected };
   });
 }
 
 export function teamProductivityTrend(ds: Dataset, days = 14): TrendPoint[] {
   const team = reportingUsers(ds);
   const dates = lastNDates(days);
-  const perUser = team.map((u) => userDayScores(ds, u.id, dates));
+  const scores = new Map(team.map((u) => [u.id, userDayScores(ds, u.id, dates)]));
   return dates.map((d, i) => {
-    const avg = perUser.length ? perUser.reduce((a, arr) => a + arr[i], 0) / perUser.length : 0;
+    // Average only over members who existed on that date.
+    const existing = team.filter((u) => u.createdAt.slice(0, 10) <= d);
+    const avg = existing.length ? existing.reduce((a, u) => a + scores.get(u.id)![i], 0) / existing.length : 0;
     return { date: d, value: Math.round(avg) };
   });
 }

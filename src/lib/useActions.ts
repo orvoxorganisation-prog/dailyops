@@ -59,6 +59,8 @@ export function useActions() {
     updateUser: (id: string, input: unknown) => run(adm.updateUserAction(id, input), "User updated"),
     setUserRole: (id: string, role: "admin" | "employee") => run(adm.setUserRoleAction(id, role), "Role updated"),
     setUserActive: (id: string, active: boolean) => run(adm.setUserActiveAction(id, active), active ? "User reactivated" : "User disabled"),
+    assignTask: (userId: string, input: unknown) => run(adm.assignTaskAction(userId, input), "Task assigned"),
+    setWeeklyGoal: (userId: string, input: unknown) => run(adm.setWeeklyGoalAction(userId, input), "Weekly goal set"),
     wipeEmployeeData: (id: string) =>
       run(adm.wipeEmployeeDataAction(id), "Work data wiped", "The member's reports, tasks, goals and proof were cleared. Account kept."),
     permanentlyDeleteUser: (id: string) =>

@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { startOfWeek, addDays } from "date-fns";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { Priority, Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { adminOrThrow } from "@/lib/rbac";
 import { writeAudit } from "@/lib/audit";
@@ -222,6 +223,90 @@ export async function permanentDeleteUserAction(userId: string): Promise<Result>
     metadata: snapshot,
   });
   revalidateAdmin();
+  return { ok: true };
+}
+
+// ── Admin-assigned tasks & weekly goals ──────────────────────────────────────
+const dayFromISO = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+
+const assignTaskSchema = z.object({
+  title: z.string().trim().min(1, "Give the task a title.").max(200),
+  description: z.string().trim().max(2000).optional(),
+  priority: z.enum(["low", "medium", "high"]).default("medium"),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
+});
+
+/** Admin creates a task on behalf of a member. */
+export async function assignTaskAction(userId: string, input: unknown): Promise<Result> {
+  const admin = await adminOrThrow();
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || !target.active || target.deletedAt) return { ok: false, error: "User not found." };
+  const parsed = assignTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid task." };
+  const d = parsed.data;
+  await prisma.task.create({
+    data: {
+      userId,
+      title: d.title,
+      description: d.description || null,
+      status: "NOT_STARTED",
+      priority: d.priority.toUpperCase() as Priority,
+      dueDate: d.dueDate ? dayFromISO(d.dueDate) : null,
+    },
+  });
+  await notifyUser({
+    recipientId: userId,
+    audience: "employee",
+    type: "ACCOUNT",
+    severity: "INFO",
+    title: "New task assigned",
+    message: `${admin.name} assigned you a task: “${d.title}”.`,
+  });
+  await writeAudit({ action: "task.assigned", actorId: admin.id, targetUserId: userId, entity: "Task", metadata: { title: d.title } });
+  revalidateAdmin();
+  revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+const setGoalSchema = z.object({
+  title: z.string().trim().min(1, "Give the goal a title.").max(200),
+  metricLabel: z.string().trim().min(1, "Add a metric (e.g. PRs merged).").max(60),
+  target: z.number().int().min(1, "Target must be at least 1.").max(1000),
+});
+
+/** Admin sets this week's goal for a member. */
+export async function setWeeklyGoalAction(userId: string, input: unknown): Promise<Result> {
+  const admin = await adminOrThrow();
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || !target.active || target.deletedAt) return { ok: false, error: "User not found." };
+  const parsed = setGoalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid goal." };
+  const weekOf = startOfWeek(new Date(), { weekStartsOn: 1 });
+  await prisma.weeklyGoal.create({
+    data: {
+      userId,
+      title: parsed.data.title,
+      metricLabel: parsed.data.metricLabel,
+      target: parsed.data.target,
+      current: 0,
+      weekOf,
+      deadline: addDays(weekOf, 4),
+      status: "BEHIND",
+    },
+  });
+  await notifyUser({
+    recipientId: userId,
+    audience: "employee",
+    type: "ACCOUNT",
+    severity: "INFO",
+    title: "New weekly goal set",
+    message: `${admin.name} set a weekly goal for you: “${parsed.data.title}” — target ${parsed.data.target} ${parsed.data.metricLabel}.`,
+  });
+  await writeAudit({ action: "goal.assigned", actorId: admin.id, targetUserId: userId, entity: "WeeklyGoal", metadata: { title: parsed.data.title } });
+  revalidateAdmin();
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
   return { ok: true };
 }
 

@@ -3,11 +3,13 @@
 import { useState } from "react";
 import {
   AlertTriangle,
+  ClipboardList,
   Eraser,
   MoreHorizontal,
   Pencil,
   Power,
   ShieldCheck,
+  Target,
   Trash2,
   UserCog,
   Users,
@@ -30,6 +32,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Avatar, PageHeader, Tag } from "@/components/common";
 import { cn } from "@/lib/utils";
 import { relativeTime, roleLabel } from "@/lib/format";
@@ -47,6 +57,8 @@ export function UsersAdmin({
 }) {
   const { setUserRole, setUserActive } = useActions();
   const [editing, setEditing] = useState<User | null>(null);
+  const [assigning, setAssigning] = useState<User | null>(null);
+  const [goaling, setGoaling] = useState<User | null>(null);
   const [confirmWipe, setConfirmWipe] = useState<User | null>(null);
   const [confirmPurge, setConfirmPurge] = useState<User | null>(null);
 
@@ -106,6 +118,13 @@ export function UsersAdmin({
                     <DropdownMenuItem onClick={() => setUserActive(u.id, !u.active)}>
                       <Power className="mr-2 h-4 w-4" /> {u.active ? "Disable access" : "Reactivate"}
                     </DropdownMenuItem>
+                    {u.active && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setAssigning(u)}><ClipboardList className="mr-2 h-4 w-4" /> Assign task</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setGoaling(u)}><Target className="mr-2 h-4 w-4" /> Set weekly goal</DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmWipe(u)}>
                       <Eraser className="mr-2 h-4 w-4" /> Wipe work data
@@ -144,6 +163,8 @@ export function UsersAdmin({
       )}
 
       {editing && <EditUserDialog user={editing} onClose={() => setEditing(null)} />}
+      {assigning && <AssignTaskDialog user={assigning} onClose={() => setAssigning(null)} />}
+      {goaling && <SetGoalDialog user={goaling} onClose={() => setGoaling(null)} />}
       {confirmWipe && <WipeDataDialog user={confirmWipe} onClose={() => setConfirmWipe(null)} />}
       {confirmPurge && <PurgeUserDialog user={confirmPurge} onClose={() => setConfirmPurge(null)} />}
     </div>
@@ -190,6 +211,116 @@ function EditUserDialog({ user, onClose }: { user: User; onClose: () => void }) 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={save} disabled={busy || !name.trim()}>Save changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AssignTaskDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const { assignTask } = useActions();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [dueDate, setDueDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const first = user.name.split(" ")[0];
+
+  const save = async () => {
+    setBusy(true);
+    const res = await assignTask(user.id, { title, description, priority, dueDate });
+    setBusy(false);
+    if (res.ok) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display">
+            <ClipboardList className="h-5 w-5 shrink-0 text-primary" /> Assign a task to {first}
+          </DialogTitle>
+          <DialogDescription>Creates a task on {first}&apos;s board and sends them a notification.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div>
+            <Label className="mb-1.5 block text-sm">Task title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Implement the token streaming endpoint" autoFocus />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-sm">Description <span className="text-muted-foreground">(optional)</span></Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Context, acceptance criteria…" className="min-h-[60px]" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1.5 block text-sm">Priority</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-sm">Due date <span className="text-muted-foreground">(optional)</span></Label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy || !title.trim()}>Assign task</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SetGoalDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const { setWeeklyGoal } = useActions();
+  const [title, setTitle] = useState("");
+  const [metricLabel, setMetricLabel] = useState("");
+  const [target, setTarget] = useState(5);
+  const [busy, setBusy] = useState(false);
+  const first = user.name.split(" ")[0];
+
+  const save = async () => {
+    setBusy(true);
+    const res = await setWeeklyGoal(user.id, { title, metricLabel, target: Number(target) });
+    setBusy(false);
+    if (res.ok) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display">
+            <Target className="h-5 w-5 shrink-0 text-primary" /> Set {first}&apos;s weekly goal
+          </DialogTitle>
+          <DialogDescription>Sets this week&apos;s measurable goal for {first} and notifies them.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div>
+            <Label className="mb-1.5 block text-sm">Goal</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ship the onboarding redesign" autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1.5 block text-sm">Metric</Label>
+              <Input value={metricLabel} onChange={(e) => setMetricLabel(e.target.value)} placeholder="flows delivered" />
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-sm">Target</Label>
+              <Input type="number" min={1} max={1000} value={target} onChange={(e) => setTarget(Number(e.target.value))} />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy || !title.trim() || !metricLabel.trim()}>Set goal</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
