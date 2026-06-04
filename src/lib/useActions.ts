@@ -59,7 +59,8 @@ export function useActions() {
     updateUser: (id: string, input: unknown) => run(adm.updateUserAction(id, input), "User updated"),
     setUserRole: (id: string, role: "admin" | "employee") => run(adm.setUserRoleAction(id, role), "Role updated"),
     setUserActive: (id: string, active: boolean) => run(adm.setUserActiveAction(id, active), active ? "User reactivated" : "User disabled"),
-    deleteUser: (id: string) => run(adm.deleteUserAction(id), "User deleted"),
+    wipeEmployeeData: (id: string) =>
+      run(adm.wipeEmployeeDataAction(id), "Work data wiped", "The member's reports, tasks, goals and proof were cleared. Account kept."),
     permanentlyDeleteUser: (id: string) =>
       run(adm.permanentDeleteUserAction(id), "Account permanently deleted", "All of the account's data was erased and its email freed."),
     updateSettings: (input: unknown) => run(adm.updateSettingsAction(input), "Settings saved"),

@@ -148,25 +148,39 @@ export async function setUserActiveAction(userId: string, active: boolean): Prom
   if (!active && (await wouldRemoveLastAdmin(userId))) {
     return { ok: false, error: "You can't disable the last remaining admin." };
   }
-  await prisma.user.update({ where: { id: userId }, data: { active } });
+  // Reactivating also clears any legacy soft-delete marker, so access is fully restored.
+  await prisma.user.update({ where: { id: userId }, data: { active, deletedAt: active ? null : undefined } });
   await writeAudit({ action: active ? "user.reactivated" : "user.disabled", actorId: admin.id, targetUserId: userId });
   revalidateAdmin();
   return { ok: true };
 }
 
-export async function deleteUserAction(userId: string): Promise<Result> {
+/**
+ * Resets a member for a new period: erases all of their work data — daily
+ * reports, proof of work, tasks (and their progress notes, via cascade),
+ * weekly goals, and notifications — while keeping the account, login, role
+ * and audit history intact. Only this member's records are touched.
+ */
+export async function wipeEmployeeDataAction(userId: string): Promise<Result> {
   const admin = await adminOrThrow();
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target || target.deletedAt) return { ok: false, error: "User not found." };
-  if (await wouldRemoveLastAdmin(userId)) {
-    return { ok: false, error: "You can't delete the last remaining admin." };
-  }
-  // Soft delete: lose access immediately, historical data + audit logs remain.
-  await prisma.user.update({
-    where: { id: userId },
-    data: { active: false, deletedAt: new Date() },
+  if (!target) return { ok: false, error: "User not found." };
+
+  await prisma.$transaction([
+    prisma.proofItem.deleteMany({ where: { userId } }),
+    prisma.dailyReport.deleteMany({ where: { userId } }),
+    prisma.task.deleteMany({ where: { userId } }), // cascades each task's progress notes
+    prisma.weeklyGoal.deleteMany({ where: { userId } }),
+    prisma.notification.deleteMany({ where: { recipientId: userId } }),
+  ]);
+  await writeAudit({
+    action: "user.data_wiped",
+    actorId: admin.id,
+    targetUserId: userId,
+    entity: "User",
+    entityId: userId,
+    metadata: { email: target.email },
   });
-  await writeAudit({ action: "user.deleted", actorId: admin.id, targetUserId: userId, entity: "User", entityId: userId });
   revalidateAdmin();
   return { ok: true };
 }

@@ -24,7 +24,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -46,23 +45,21 @@ export function UsersAdmin({
   currentUserId: string;
   audit: AuditEntry[];
 }) {
-  const { setUserRole, setUserActive, deleteUser } = useActions();
+  const { setUserRole, setUserActive } = useActions();
   const [editing, setEditing] = useState<User | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
+  const [confirmWipe, setConfirmWipe] = useState<User | null>(null);
   const [confirmPurge, setConfirmPurge] = useState<User | null>(null);
 
-  const visible = users.filter((u) => !u.deleted);
-  const deleted = users.filter((u) => u.deleted);
-  const admins = visible.filter((u) => u.role === "admin").length;
-  const employees = visible.filter((u) => u.role === "employee").length;
-  const disabled = visible.filter((u) => !u.active).length;
+  const admins = users.filter((u) => u.role === "admin").length;
+  const employees = users.filter((u) => u.role === "employee").length;
+  const disabled = users.filter((u) => !u.active).length;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Employees" description="Manage accounts, roles and access for your company." />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="Total" value={visible.length} tone="text-foreground" />
+        <Tile label="Total" value={users.length} tone="text-foreground" />
         <Tile label="Admins" value={admins} tone="text-sky-600" />
         <Tile label="Employees" value={employees} tone="text-teal-600" />
         <Tile label="Disabled" value={disabled} tone="text-amber-600" />
@@ -77,8 +74,8 @@ export function UsersAdmin({
           <span />
         </div>
         <ul className="divide-y">
-          {[...visible, ...deleted].map((u) => (
-            <li key={u.id} className={cn("grid grid-cols-2 items-center gap-3 px-4 py-3 md:grid-cols-[2fr_1fr_1fr_1fr_2.5rem]", u.deleted && "opacity-55")}>
+          {users.map((u) => (
+            <li key={u.id} className={cn("grid grid-cols-2 items-center gap-3 px-4 py-3 md:grid-cols-[2fr_1fr_1fr_1fr_2.5rem]", !u.active && "opacity-60")}>
               <div className="flex items-center gap-3">
                 <Avatar user={u} size="sm" />
                 <div className="min-w-0">
@@ -93,7 +90,7 @@ export function UsersAdmin({
                 {u.role === "admin" ? <Tag tone="info"><ShieldCheck className="h-3 w-3" /> Admin</Tag> : <Tag tone="success">Employee</Tag>}
               </div>
               <div className="hidden md:block">
-                {u.deleted ? <Tag tone="critical">Deleted</Tag> : u.active ? <Tag tone="success">Active</Tag> : <Tag tone="warning">Disabled</Tag>}
+                {u.active ? <Tag tone="success">Active</Tag> : <Tag tone="warning">Disabled</Tag>}
               </div>
               <div className="hidden text-xs text-muted-foreground md:block">{u.lastLoginAt ? relativeTime(u.lastLoginAt) : "Never"}</div>
               <div className="flex justify-end">
@@ -102,32 +99,23 @@ export function UsersAdmin({
                     <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    {!u.deleted ? (
-                      <>
-                        <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="mr-2 h-4 w-4" /> Edit details</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setUserRole(u.id, u.role === "admin" ? "employee" : "admin")}>
-                          <UserCog className="mr-2 h-4 w-4" /> {u.role === "admin" ? "Make employee" : "Make admin"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setUserActive(u.id, !u.active)}>
-                          <Power className="mr-2 h-4 w-4" /> {u.active ? "Disable access" : "Reactivate"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDelete(u)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete user
-                        </DropdownMenuItem>
-                      </>
-                    ) : (
-                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                        Soft-deleted · access revoked
-                      </DropdownMenuLabel>
-                    )}
+                    <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="mr-2 h-4 w-4" /> Edit details</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setUserRole(u.id, u.role === "admin" ? "employee" : "admin")}>
+                      <UserCog className="mr-2 h-4 w-4" /> {u.role === "admin" ? "Make employee" : "Make admin"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setUserActive(u.id, !u.active)}>
+                      <Power className="mr-2 h-4 w-4" /> {u.active ? "Disable access" : "Reactivate"}
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmWipe(u)}>
+                      <Eraser className="mr-2 h-4 w-4" /> Wipe work data
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       disabled={u.id === currentUserId}
                       onClick={() => setConfirmPurge(u)}
                     >
-                      <Eraser className="mr-2 h-4 w-4" /> Permanently delete
+                      <Trash2 className="mr-2 h-4 w-4" /> Permanently delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -156,30 +144,7 @@ export function UsersAdmin({
       )}
 
       {editing && <EditUserDialog user={editing} onClose={() => setEditing(null)} />}
-      {confirmDelete && (
-        <Dialog open onOpenChange={(v) => !v && setConfirmDelete(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="font-display">Delete {confirmDelete.name}?</DialogTitle>
-              <DialogDescription>
-                This is a soft delete. {confirmDelete.name.split(" ")[0]} loses access immediately, but their historical reports, tasks and audit logs are retained.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-              <Button
-                variant="destructive"
-                onClick={async () => {
-                  const res = await deleteUser(confirmDelete.id);
-                  if (res.ok) setConfirmDelete(null);
-                }}
-              >
-                Delete user
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {confirmWipe && <WipeDataDialog user={confirmWipe} onClose={() => setConfirmWipe(null)} />}
       {confirmPurge && <PurgeUserDialog user={confirmPurge} onClose={() => setConfirmPurge(null)} />}
     </div>
   );
@@ -225,6 +190,56 @@ function EditUserDialog({ user, onClose }: { user: User; onClose: () => void }) 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={save} disabled={busy || !name.trim()}>Save changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WipeDataDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const { wipeEmployeeData } = useActions();
+  const [busy, setBusy] = useState(false);
+  const first = user.name.split(" ")[0];
+
+  const wipe = async () => {
+    if (busy) return;
+    setBusy(true);
+    const res = await wipeEmployeeData(user.id);
+    setBusy(false);
+    if (res.ok) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display">
+            <Eraser className="h-5 w-5 shrink-0 text-amber-600" /> Wipe {first}&apos;s work data?
+          </DialogTitle>
+          <DialogDescription>
+            Resets this member for a fresh start (e.g. a new quarter). Their{" "}
+            <span className="font-medium text-foreground">account, login and role stay intact</span> — only the work data below is cleared.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-1 text-sm">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="mb-1.5 font-medium text-foreground">Cleared for {user.name}</p>
+            <ul className="ml-4 list-disc space-y-0.5 text-muted-foreground">
+              <li>Daily reports &amp; proof of work</li>
+              <li>Tasks &amp; progress notes</li>
+              <li>Weekly goals</li>
+              <li>Notifications</li>
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">This can&apos;t be undone. Nobody else&apos;s data is affected.</p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" disabled={busy} onClick={wipe}>
+            {busy ? "Wiping…" : "Wipe work data"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
