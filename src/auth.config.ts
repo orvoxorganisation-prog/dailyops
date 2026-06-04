@@ -2,7 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 
 const AUTH_PAGES = ["/login", "/signup", "/forgot-password", "/reset-password"];
 const ADMIN_PREFIXES = ["/company", "/summary", "/performance", "/analytics", "/all-reports", "/admin", "/settings"];
-const EMPLOYEE_PREFIXES = ["/dashboard", "/reports", "/tasks", "/goals", "/proof"];
+const EMPLOYEE_PREFIXES = ["/dashboard", "/reports", "/tasks", "/goals", "/proof", "/leave"];
 
 const homeFor = (role?: string) => (role === "admin" ? "/company" : "/dashboard");
 

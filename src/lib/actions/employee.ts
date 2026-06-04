@@ -291,3 +291,43 @@ export async function markAllNotificationsReadAction(): Promise<Result> {
   revalidatePath("/company");
   return { ok: true };
 }
+
+// ── Leave requests ───────────────────────────────────────────────────────────
+const leaveSchema = z.object({
+  reason: z.string().trim().min(3, "Add a brief reason for your leave.").max(500),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a start date."),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick an end date."),
+});
+
+export async function requestLeaveAction(input: unknown): Promise<Result> {
+  const user = await currentUserOrThrow();
+  const parsed = leaveSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid leave request." };
+  const { reason, startDate, endDate } = parsed.data;
+  if (endDate < startDate) return { ok: false, error: "End date can't be before the start date." };
+
+  await prisma.leave.create({
+    data: { userId: user.id, reason: reason.trim(), startDate: dayFromISO(startDate), endDate: dayFromISO(endDate), status: "PENDING" },
+  });
+  await notifyAdmins({
+    type: "ACCOUNT",
+    severity: "INFO",
+    relatedUserId: user.id,
+    title: `Leave request — ${user.name}`,
+    message: `${user.name} requested leave from ${startDate} to ${endDate}. Pending your approval.`,
+  });
+  revalidatePath("/leave");
+  revalidatePath("/admin/leave");
+  return { ok: true };
+}
+
+export async function cancelLeaveAction(leaveId: string): Promise<Result> {
+  const user = await currentUserOrThrow();
+  const leave = await prisma.leave.findUnique({ where: { id: leaveId } });
+  if (!leave || leave.userId !== user.id) return { ok: false, error: "Leave request not found." };
+  if (leave.status !== "PENDING") return { ok: false, error: "Only pending requests can be withdrawn." };
+  await prisma.leave.delete({ where: { id: leaveId } });
+  revalidatePath("/leave");
+  revalidatePath("/admin/leave");
+  return { ok: true };
+}

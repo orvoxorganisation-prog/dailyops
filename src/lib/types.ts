@@ -10,6 +10,7 @@ export type Priority = "low" | "medium" | "high";
 export type ProofType = "image" | "document" | "screenshot" | "link" | "github" | "loom";
 export type ReportStatus = "submitted" | "flagged";
 export type Mood = "great" | "good" | "ok" | "rough";
+export type LeaveStatus = "pending" | "approved" | "rejected";
 
 export interface User {
   id: string;
@@ -150,9 +151,24 @@ export interface AuditEntry {
   metadata?: Record<string, unknown> | null;
 }
 
+export interface Leave {
+  id: string;
+  userId: string;
+  userName: string;
+  reason: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  status: LeaveStatus;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
 export interface Dataset {
   users: User[];
   tasks: Task[];
   goals: WeeklyGoal[];
   reports: DailyReport[];
+  leaves: Leave[];
 }

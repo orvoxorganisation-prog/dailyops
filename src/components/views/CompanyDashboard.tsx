@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LineChart, BarChart, Sparkline, TONE_HEX } from "@/components/charts";
 import { Avatar, StatCard, EmptyState } from "@/components/common";
+import { ExportButton } from "@/components/ExportButton";
 import { prettyDate, scoreLabel, scoreTone, shortDate, todayISO } from "@/lib/format";
 import { useActions } from "@/lib/useActions";
 import { companyKpis, computeAllMetrics, missedReportTrend, teamProductivityTrend } from "@/lib/scoring";
@@ -39,7 +40,26 @@ export function CompanyDashboard({ data, companyName }: { data: Dataset; company
           <h1 className="font-display text-2xl font-semibold tracking-tight">Company Command Center</h1>
           <p className="mt-1 text-sm text-muted-foreground">{companyName} · {prettyDate(today)} · {kpi.totalEmployees} reporting member{kpi.totalEmployees === 1 ? "" : "s"}</p>
         </div>
-        <Button onClick={() => runDailyCheck()} variant="outline"><RefreshCw className="mr-2 h-4 w-4" /> Run daily check</Button>
+        <div className="flex gap-2">
+          <ExportButton
+            filename="company-overview"
+            rows={metrics.map((m) => ({
+              employee: m.user.name,
+              team: m.user.team,
+              role: m.user.role,
+              score: m.score.total,
+              submitted_today: m.submittedToday ? "yes" : "no",
+              report_streak_days: m.reportStreak,
+              reports: `${m.reportsThisCycle}/${m.reportsExpected}`,
+              weekly_completion_pct: m.weeklyCompletionRate,
+              sop_compliance_pct: m.sopComplianceScore,
+              tasks_completed: m.tasksCompleted,
+              tasks_total: m.tasksTotal,
+              open_blockers: m.openBlockers,
+            }))}
+          />
+          <Button onClick={() => runDailyCheck()} variant="outline"><RefreshCw className="mr-2 h-4 w-4" /> Run daily check</Button>
+        </div>
       </div>
 
       {!hasTeam ? (

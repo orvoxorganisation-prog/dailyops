@@ -43,21 +43,28 @@ const uReports = (ds: Dataset, id: string) => ds.reports.filter((r) => r.userId 
 const uTasks = (ds: Dataset, id: string) => ds.tasks.filter((t) => t.userId === id);
 const uGoals = (ds: Dataset, id: string) => ds.goals.filter((g) => g.userId === id);
 
+/** Is this user on an approved leave covering the given YYYY-MM-DD date? */
+export const onLeave = (ds: Dataset, id: string, date: string): boolean =>
+  (ds.leaves ?? []).some(
+    (l) => l.userId === id && l.status === "approved" && l.startDate <= date && date <= l.endDate
+  );
+
 export function reportingUsers(ds: Dataset): User[] {
   return ds.users.filter((u) => u.role === "employee" && u.active);
 }
 
-export function computeStreak(reports: DailyReport[]): number {
+export function computeStreak(reports: DailyReport[], isOnLeave: (d: string) => boolean = () => false): number {
   const have = new Set(reports.map((r) => r.date));
   let streak = 0;
   const cursor = new Date();
   if (!have.has(format(cursor, "yyyy-MM-dd"))) cursor.setDate(cursor.getDate() - 1);
   for (let i = 0; i < 60; i++) {
-    if (!isWeekday(cursor)) {
+    const key = format(cursor, "yyyy-MM-dd");
+    // Weekends and approved-leave days are skipped — they don't break the streak.
+    if (!isWeekday(cursor) || isOnLeave(key)) {
       cursor.setDate(cursor.getDate() - 1);
       continue;
     }
-    const key = format(cursor, "yyyy-MM-dd");
     if (have.has(key)) {
       streak++;
       cursor.setDate(cursor.getDate() - 1);
@@ -72,12 +79,13 @@ function goalCompletionForUser(ds: Dataset, id: string): number {
   return Math.round(gs.reduce((a, g) => a + clamp(pct(g.current, g.target)), 0) / gs.length);
 }
 
-function userDayScores(ds: Dataset, id: string, dates: string[]): number[] {
+function userDayScores(ds: Dataset, id: string, dates: string[]): (number | null)[] {
   const byDate = new Map(uReports(ds, id).map((r) => [r.date, r]));
   const goalsPct = goalCompletionForUser(ds, id);
-  // Real data only — a day with no report scores 0. (Previously this synthesized
-  // a declining curve for empty days, which showed up as fake historical data.)
+  // null = not tracked (approved leave); 0 = expected day with no report.
+  // (No synthetic fill for empty days — real data only.)
   return dates.map((d) => {
+    if (onLeave(ds, id, d)) return null;
     const rep = byDate.get(d);
     if (!rep) return 0;
     return clamp(
@@ -90,10 +98,11 @@ export function scoreBreakdown(ds: Dataset, id: string): ScoreBreakdown {
   const reports = uReports(ds, id);
   const tasks = uTasks(ds, id);
   const cycle = lastNDates(14);
-  const expected = cycle.filter((d) => isWeekday(parseISO(d))).length;
+  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && !onLeave(ds, id, d));
+  const expected = workdays.length;
   const have = new Set(reports.map((r) => r.date));
-  const submitted = cycle.filter((d) => isWeekday(parseISO(d)) && have.has(d)).length;
-  const reportConsistency = clamp(pct(submitted, expected));
+  const submitted = workdays.filter((d) => have.has(d)).length;
+  const reportConsistency = expected ? clamp(pct(submitted, expected)) : 100;
 
   const total = tasks.length;
   const completed = tasks.filter((t) => t.status === "completed").length;
@@ -122,15 +131,16 @@ export function computeMetrics(ds: Dataset, user: User): EmployeeMetrics {
   const reports = uReports(ds, user.id);
   const tasks = uTasks(ds, user.id);
   const cycle = lastNDates(14);
-  const expected = cycle.filter((d) => isWeekday(parseISO(d))).length;
+  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && !onLeave(ds, user.id, d));
+  const expected = workdays.length;
   const have = new Set(reports.map((r) => r.date));
-  const submitted = cycle.filter((d) => isWeekday(parseISO(d)) && have.has(d)).length;
+  const submitted = workdays.filter((d) => have.has(d)).length;
   const score = scoreBreakdown(ds, user.id);
   const today = todayStr();
 
   return {
     user,
-    reportStreak: computeStreak(reports),
+    reportStreak: computeStreak(reports, (d) => onLeave(ds, user.id, d)),
     reportsThisCycle: submitted,
     reportsExpected: expected,
     tasksCompleted: tasks.filter((t) => t.status === "completed").length,
@@ -142,7 +152,9 @@ export function computeMetrics(ds: Dataset, user: User): EmployeeMetrics {
     score,
     submittedToday: have.has(today),
     flaggedToday: reports.some((r) => r.date === today && r.flagged),
-    trend: userDayScores(ds, user.id, cycle),
+    // Keep 14 points so date labels align; leave days surface as 0 in the
+    // decorative sparkline (the score/consistency metrics already exclude them).
+    trend: userDayScores(ds, user.id, cycle).map((v) => v ?? 0),
   };
 }
 
@@ -168,7 +180,7 @@ export function companyKpis(ds: Dataset): CompanyKpis {
   const today = todayStr();
   const reportsToday = ds.reports.filter((r) => r.date === today && team.some((u) => u.id === r.userId));
   const reportedIds = new Set(reportsToday.map((r) => r.userId));
-  const missingToday = team.filter((u) => !reportedIds.has(u.id));
+  const missingToday = team.filter((u) => !reportedIds.has(u.id) && !onLeave(ds, u.id, today));
   const tasksCompletedToday = ds.tasks.filter((t) => t.completedAt && t.completedAt.slice(0, 10) === today).length;
   const openBlockers = ds.tasks.filter((t) => t.status === "blocked").length;
   const goals = ds.goals.filter((g) => team.some((u) => u.id === g.userId));
@@ -202,12 +214,12 @@ export function missedReportTrend(ds: Dataset, days = 14): TrendPoint[] {
   const team = reportingUsers(ds);
   return lastNDates(days).map((d) => {
     const weekday = isWeekday(parseISO(d));
-    // Only count members who already existed on that date — no fake "missed
-    // reports" for days before the team (or a given member) was created.
-    const existing = team.filter((u) => u.createdAt.slice(0, 10) <= d);
-    const existingIds = new Set(existing.map((u) => u.id));
-    const expected = weekday ? existing.length : 0;
-    const submitted = ds.reports.filter((r) => r.date === d && existingIds.has(r.userId)).length;
+    // Members who existed and were NOT on approved leave that day — leave days
+    // aren't counted as missed, and pre-creation days aren't counted at all.
+    const dueUsers = team.filter((u) => u.createdAt.slice(0, 10) <= d && !onLeave(ds, u.id, d));
+    const dueIds = new Set(dueUsers.map((u) => u.id));
+    const expected = weekday ? dueUsers.length : 0;
+    const submitted = ds.reports.filter((r) => r.date === d && dueIds.has(r.userId)).length;
     return { date: d, value: expected ? clamp(pct(submitted, expected)) : 0, submitted, expected };
   });
 }
@@ -217,9 +229,12 @@ export function teamProductivityTrend(ds: Dataset, days = 14): TrendPoint[] {
   const dates = lastNDates(days);
   const scores = new Map(team.map((u) => [u.id, userDayScores(ds, u.id, dates)]));
   return dates.map((d, i) => {
-    // Average only over members who existed on that date.
-    const existing = team.filter((u) => u.createdAt.slice(0, 10) <= d);
-    const avg = existing.length ? existing.reduce((a, u) => a + scores.get(u.id)![i], 0) / existing.length : 0;
+    // Average only over members who existed and were tracked (not on leave) that day.
+    const tracked = team
+      .filter((u) => u.createdAt.slice(0, 10) <= d)
+      .map((u) => scores.get(u.id)![i])
+      .filter((v): v is number => v !== null);
+    const avg = tracked.length ? tracked.reduce((a, v) => a + v, 0) / tracked.length : 0;
     return { date: d, value: Math.round(avg) };
   });
 }

@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState, PageHeader } from "@/components/common";
+import { ExportButton } from "@/components/ExportButton";
 import { ReportCard } from "./ReportCard";
 import { todayISO } from "@/lib/format";
 import { reportingUsers } from "@/lib/scoring";
@@ -35,6 +36,19 @@ export function AllReports({ data }: { data: Dataset }) {
 
   const flaggedCount = reports.filter((r) => r.flagged).length;
 
+  const exportRows = reports.map((r) => ({
+    date: r.date,
+    employee: userById[r.userId]?.name ?? r.userId,
+    status: r.flagged ? "flagged" : "submitted",
+    hours: r.hoursWorked,
+    completed_today: r.completedToday,
+    progress_made: r.progressMade,
+    planned_next: r.plannedTomorrow,
+    blockers: r.hasBlockers ? r.blockers : "",
+    proof_count: r.proof.length,
+    mood: r.mood ?? "",
+  }));
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -42,6 +56,7 @@ export function AllReports({ data }: { data: Dataset }) {
         description={`Browse every submitted report across the team. ${flaggedCount} flagged in this view.`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <ExportButton filename="all-reports" rows={exportRows} />
             <Select value={who} onValueChange={setWho}>
               <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
               <SelectContent>

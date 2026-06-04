@@ -4,6 +4,7 @@ import { prisma } from "./db";
 import {
   serializeAudit,
   serializeGoal,
+  serializeLeave,
   serializeNotification,
   serializeProof,
   serializeReport,
@@ -16,12 +17,15 @@ import type {
   DailyReport,
   Dataset,
   EmployeeMetrics,
+  Leave,
   Notification,
   ProofItem,
   Task,
   User,
   WeeklyGoal,
 } from "./types";
+
+const leaveInclude = { user: true, reviewedBy: true } as const;
 
 const HISTORY_DAYS = 45;
 
@@ -37,7 +41,7 @@ export interface EmployeeBundle {
 
 export async function getEmployeeBundle(userId: string): Promise<EmployeeBundle> {
   const cutoff = subDays(new Date(), HISTORY_DAYS);
-  const [dbUser, reports, tasks, goals, proofs] = await Promise.all([
+  const [dbUser, reports, tasks, goals, proofs, leaves] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     prisma.dailyReport.findMany({
       where: { userId, date: { gte: cutoff } },
@@ -54,13 +58,14 @@ export async function getEmployeeBundle(userId: string): Promise<EmployeeBundle>
       orderBy: { weekOf: "desc" },
     }),
     prisma.proofItem.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
+    prisma.leave.findMany({ where: { userId, status: "APPROVED" }, include: leaveInclude }),
   ]);
 
   const user = serializeUser(dbUser);
   const sReports = reports.map(serializeReport);
   const sTasks = tasks.map(serializeTask);
   const sGoals = goals.map(serializeGoal);
-  const dataset: Dataset = { users: [user], reports: sReports, tasks: sTasks, goals: sGoals };
+  const dataset: Dataset = { users: [user], reports: sReports, tasks: sTasks, goals: sGoals, leaves: leaves.map(serializeLeave) };
 
   return {
     user,
@@ -75,7 +80,7 @@ export async function getEmployeeBundle(userId: string): Promise<EmployeeBundle>
 
 export async function getCompanyDataset(): Promise<Dataset> {
   const cutoff = subDays(new Date(), 60);
-  const [users, reports, tasks, goals] = await Promise.all([
+  const [users, reports, tasks, goals, leaves] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.dailyReport.findMany({
       where: { date: { gte: cutoff } },
@@ -84,12 +89,14 @@ export async function getCompanyDataset(): Promise<Dataset> {
     }),
     prisma.task.findMany({ include: { progressNotes: true } }),
     prisma.weeklyGoal.findMany({ where: { weekOf: { gte: subDays(new Date(), 56) } } }),
+    prisma.leave.findMany({ where: { status: "APPROVED" }, include: leaveInclude }),
   ]);
   return {
     users: users.map(serializeUser),
     reports: reports.map(serializeReport),
     tasks: tasks.map(serializeTask),
     goals: goals.map(serializeGoal),
+    leaves: leaves.map(serializeLeave),
   };
 }
 
@@ -99,9 +106,26 @@ export async function getAllReports(): Promise<{ dataset: Dataset; reports: Dail
     prisma.dailyReport.findMany({ include: { proof: true }, orderBy: { date: "desc" }, take: 400 }),
   ]);
   return {
-    dataset: { users: users.map(serializeUser), reports: reports.map(serializeReport), tasks: [], goals: [] },
+    dataset: { users: users.map(serializeUser), reports: reports.map(serializeReport), tasks: [], goals: [], leaves: [] },
     reports: reports.map(serializeReport),
   };
+}
+
+export async function listLeavesForUser(userId: string): Promise<Leave[]> {
+  const rows = await prisma.leave.findMany({
+    where: { userId },
+    include: leaveInclude,
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(serializeLeave);
+}
+
+export async function listAllLeaves(): Promise<Leave[]> {
+  const rows = await prisma.leave.findMany({
+    include: leaveInclude,
+    orderBy: [{ status: "asc" }, { startDate: "desc" }],
+  });
+  return rows.map(serializeLeave);
 }
 
 export async function listNotifications(user: User): Promise<Notification[]> {

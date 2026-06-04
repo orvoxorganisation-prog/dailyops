@@ -12,7 +12,7 @@ import { todayStr } from "@/lib/scoring";
 
 export type Result = { ok: true } | { ok: false; error: string };
 
-const ADMIN_PATHS = ["/company", "/summary", "/performance", "/analytics", "/all-reports", "/admin/users", "/settings"];
+const ADMIN_PATHS = ["/company", "/summary", "/performance", "/analytics", "/all-reports", "/admin/users", "/admin/leave", "/settings"];
 function revalidateAdmin() {
   for (const p of ADMIN_PATHS) revalidatePath(p);
 }
@@ -306,6 +306,37 @@ export async function setWeeklyGoalAction(userId: string, input: unknown): Promi
   await writeAudit({ action: "goal.assigned", actorId: admin.id, targetUserId: userId, entity: "WeeklyGoal", metadata: { title: parsed.data.title } });
   revalidateAdmin();
   revalidatePath("/goals");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// ── Leave review ─────────────────────────────────────────────────────────────
+export async function reviewLeaveAction(leaveId: string, decision: "approve" | "reject", note?: string): Promise<Result> {
+  const admin = await adminOrThrow();
+  const leave = await prisma.leave.findUnique({ where: { id: leaveId } });
+  if (!leave) return { ok: false, error: "Leave request not found." };
+  if (leave.status !== "PENDING") return { ok: false, error: "This request has already been reviewed." };
+
+  const approved = decision === "approve";
+  await prisma.leave.update({
+    where: { id: leaveId },
+    data: { status: approved ? "APPROVED" : "REJECTED", reviewedById: admin.id, reviewedAt: new Date(), reviewNote: note?.trim() || null },
+  });
+  const range = `${leave.startDate.toISOString().slice(0, 10)} → ${leave.endDate.toISOString().slice(0, 10)}`;
+  await notifyUser({
+    recipientId: leave.userId,
+    audience: "employee",
+    type: "ACCOUNT",
+    severity: approved ? "SUCCESS" : "WARNING",
+    title: approved ? "Leave approved" : "Leave request declined",
+    message: approved
+      ? `Your leave (${range}) was approved — performance tracking is paused for those days.`
+      : `Your leave request (${range}) was declined${note?.trim() ? `: ${note.trim()}` : "."}`,
+  });
+  await writeAudit({ action: approved ? "leave.approved" : "leave.rejected", actorId: admin.id, targetUserId: leave.userId, entity: "Leave", entityId: leaveId });
+  revalidateAdmin();
+  revalidatePath("/admin/leave");
+  revalidatePath("/leave");
   revalidatePath("/dashboard");
   return { ok: true };
 }

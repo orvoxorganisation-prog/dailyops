@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, PageHeader, Tag } from "@/components/common";
+import { ExportButton } from "@/components/ExportButton";
 import { cn } from "@/lib/utils";
 import { relativeTime, roleLabel } from "@/lib/format";
 import { useActions } from "@/lib/useActions";
@@ -68,7 +69,25 @@ export function UsersAdmin({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Employees" description="Manage accounts, roles and access for your company." />
+      <PageHeader
+        title="Employees"
+        description="Manage accounts, roles and access for your company."
+        actions={
+          <ExportButton
+            filename="employees"
+            rows={users.map((u) => ({
+              name: u.name,
+              email: u.email,
+              role: u.role,
+              status: u.active ? "active" : "disabled",
+              title: u.title,
+              team: u.team,
+              last_active: u.lastLoginAt ?? "never",
+              joined: u.createdAt.slice(0, 10),
+            }))}
+          />
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile label="Total" value={users.length} tone="text-foreground" />

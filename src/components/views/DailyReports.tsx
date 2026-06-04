@@ -18,7 +18,7 @@ export function DailyReports({ user, reports }: { user: User; reports: DailyRepo
 
   const sorted = [...reports].sort((a, b) => (a.date < b.date ? 1 : -1));
   const todaysReport = sorted.find((r) => r.date === today);
-  const m = computeMetrics({ users: [user], reports: sorted, tasks: [], goals: [] }, user);
+  const m = computeMetrics({ users: [user], reports: sorted, tasks: [], goals: [], leaves: [] }, user);
   const avgHours = sorted.length
     ? (sorted.slice(0, 14).reduce((a, r) => a + r.hoursWorked, 0) / Math.min(14, sorted.length)).toFixed(1)
     : "0";

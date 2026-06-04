@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, Tag, EmptyState } from "@/components/common";
+import { ExportButton } from "@/components/ExportButton";
 import { cn } from "@/lib/utils";
 import { prettyDate, scoreTone, todayISO } from "@/lib/format";
 import { TONE_HEX } from "@/components/charts";
@@ -24,6 +25,18 @@ export function FounderSummary({ data, companyName }: { data: Dataset; companyNa
   const { nudge } = useActions();
   const today = todayISO();
   const rows = founderSummary(data);
+
+  const exportRows = rows.map((r) => ({
+    employee: r.user.name,
+    title: r.user.title,
+    submitted: r.submitted ? "yes" : "no",
+    flagged: r.flagged ? "yes" : "no",
+    hours: r.hours,
+    completed_today: r.completed,
+    blockers: r.blockers ?? "",
+    overdue_tasks: r.overdueCount,
+    score: r.score,
+  }));
 
   const submitted = rows.filter((r) => r.submitted);
   const missing = rows.filter((r) => !r.submitted);
@@ -41,9 +54,12 @@ export function FounderSummary({ data, companyName }: { data: Dataset; companyNa
 
   return (
     <div className="space-y-6">
-      <div className="border-b pb-5">
-        <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /><h1 className="font-display text-2xl font-semibold tracking-tight">Daily Founder Summary</h1></div>
-        <p className="mt-1 text-sm text-muted-foreground">{companyName} · {prettyDate(today)} · auto-generated from today&apos;s reports &amp; tasks</p>
+      <div className="flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /><h1 className="font-display text-2xl font-semibold tracking-tight">Daily Founder Summary</h1></div>
+          <p className="mt-1 text-sm text-muted-foreground">{companyName} · {prettyDate(today)} · auto-generated from today&apos;s reports &amp; tasks</p>
+        </div>
+        <ExportButton filename="daily-summary" rows={exportRows} />
       </div>
 
       {rows.length === 0 ? (

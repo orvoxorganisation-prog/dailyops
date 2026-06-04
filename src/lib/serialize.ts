@@ -3,6 +3,7 @@ import { initials as toInitials } from "./format";
 import type {
   AuditEntry,
   DailyReport,
+  Leave,
   Notification,
   ProofItem,
   Task,
@@ -113,6 +114,24 @@ export function serializeNotification(n: Prisma.NotificationGetPayload<object>):
     read: n.read,
     createdAt: n.createdAt.toISOString(),
     relatedUserId: n.relatedUserId ?? undefined,
+  };
+}
+
+export function serializeLeave(
+  l: Prisma.LeaveGetPayload<{ include: { user: true; reviewedBy: true } }>
+): Leave {
+  return {
+    id: l.id,
+    userId: l.userId,
+    userName: l.user.name,
+    reason: l.reason,
+    startDate: ymd(l.startDate),
+    endDate: ymd(l.endDate),
+    status: low(l.status) as Leave["status"],
+    reviewedByName: l.reviewedBy?.name ?? null,
+    reviewedAt: l.reviewedAt ? l.reviewedAt.toISOString() : null,
+    reviewNote: l.reviewNote ?? null,
+    createdAt: l.createdAt.toISOString(),
   };
 }
 

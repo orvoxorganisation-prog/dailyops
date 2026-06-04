@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar } from "@/components/common";
+import { ExportButton } from "@/components/ExportButton";
 import { LineChart, Meter, Sparkline, TONE_HEX } from "@/components/charts";
 import { PageHeader } from "@/components/common";
 import { cn } from "@/lib/utils";
@@ -42,14 +43,31 @@ export function Performance({ data }: { data: Dataset }) {
         title="Employee Performance"
         description="Streaks, completion rates, SOP compliance and productivity scores for every team member."
         actions={
-          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {SORTS.map((s) => (
-                <SelectItem key={s.key} value={s.key}>Sort: {s.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <ExportButton
+              filename="performance"
+              rows={metrics.map((m) => ({
+                employee: m.user.name,
+                team: m.user.team,
+                score: m.score.total,
+                report_streak_days: m.reportStreak,
+                reports: `${m.reportsThisCycle}/${m.reportsExpected}`,
+                weekly_completion_pct: m.weeklyCompletionRate,
+                sop_compliance_pct: m.sopComplianceScore,
+                tasks_completed: m.tasksCompleted,
+                tasks_total: m.tasksTotal,
+                open_blockers: m.openBlockers,
+              }))}
+            />
+            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+              <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {SORTS.map((s) => (
+                  <SelectItem key={s.key} value={s.key}>Sort: {s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         }
       />
 

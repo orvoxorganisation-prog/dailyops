@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Building2,
+  CalendarOff,
   FileText,
   Gauge,
   Inbox,
@@ -28,6 +29,7 @@ const employeeNav: NavItem[] = [
   { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/goals", label: "Weekly Goals", icon: Target },
   { href: "/proof", label: "Proof of Work", icon: Paperclip },
+  { href: "/leave", label: "Leave", icon: CalendarOff },
 ];
 
 const adminNav: NavItem[] = [
@@ -37,6 +39,7 @@ const adminNav: NavItem[] = [
   { href: "/analytics", label: "Team Analytics", icon: TrendingUp },
   { href: "/all-reports", label: "All Reports", icon: Inbox },
   { href: "/admin/users", label: "Employees", icon: Users },
+  { href: "/admin/leave", label: "Leave", icon: CalendarOff },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

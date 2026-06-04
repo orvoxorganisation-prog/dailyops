@@ -43,6 +43,11 @@ export function useActions() {
     // notifications
     markRead: (id: string) => emp.markNotificationReadAction(id).then(() => router.refresh()),
     markAllRead: () => emp.markAllNotificationsReadAction().then(() => router.refresh()),
+    // leave
+    requestLeave: (input: unknown) => run(emp.requestLeaveAction(input), "Leave requested", "Sent to an admin for approval."),
+    cancelLeave: (id: string) => run(emp.cancelLeaveAction(id), "Leave request withdrawn"),
+    reviewLeave: (id: string, decision: "approve" | "reject", note?: string) =>
+      run(adm.reviewLeaveAction(id, decision, note), decision === "approve" ? "Leave approved" : "Leave request declined"),
     // admin: review
     nudge: (id: string, name?: string) => run(adm.nudgeAction(id), name ? `Nudge sent to ${name.split(" ")[0]}` : "Nudge sent"),
     toggleFlag: (id: string, flag: boolean, reason?: string) =>

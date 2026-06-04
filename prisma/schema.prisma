@@ -76,6 +76,12 @@ enum NotificationType {
   ACCOUNT
 }
 
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -100,6 +106,8 @@ model User {
   resetTokens    PasswordResetToken[]
   auditPerformed AuditLog[]      @relation("Actor")
   auditTargeted  AuditLog[]      @relation("Target")
+  leaves         Leave[]         @relation("LeaveOwner")
+  leavesReviewed Leave[]         @relation("LeaveReviewer")
 
   @@index([role, active])
 }
@@ -228,6 +236,25 @@ model AuditLog {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model Leave {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation("LeaveOwner", fields: [userId], references: [id], onDelete: Cascade)
+  reason       String
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  status       LeaveStatus @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?       @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
 }
 
 model CompanySettings {
