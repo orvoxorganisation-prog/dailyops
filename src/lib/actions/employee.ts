@@ -211,13 +211,17 @@ const goalSchema = z.object({
   title: z.string().trim().min(1, "Give the goal a title.").max(200),
   metricLabel: z.string().trim().min(1, "Add a metric (e.g. PRs merged).").max(60),
   target: z.number().int().min(1, "Target must be at least 1.").max(1000),
+  weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
 });
+
+const goalStatusFor = (current: number, target: number) =>
+  current >= target ? "COMPLETED" : current >= target * 0.7 ? "ON_TRACK" : current >= target * 0.45 ? "AT_RISK" : "BEHIND";
 
 export async function createGoalAction(input: unknown): Promise<Result> {
   const user = await currentUserOrThrow();
   const parsed = goalSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid goal." };
-  const weekOf = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekOf = parsed.data.weekOf ? dayFromISO(parsed.data.weekOf) : startOfWeek(new Date(), { weekStartsOn: 1 });
   await prisma.weeklyGoal.create({
     data: {
       userId: user.id,
@@ -230,6 +234,40 @@ export async function createGoalAction(input: unknown): Promise<Result> {
       status: "BEHIND",
     },
   });
+  revalidateEmployee();
+  return { ok: true };
+}
+
+export async function updateGoalAction(goalId: string, input: unknown): Promise<Result> {
+  const user = await currentUserOrThrow();
+  const goal = await prisma.weeklyGoal.findUnique({ where: { id: goalId } });
+  if (!goal || goal.userId !== user.id) return { ok: false, error: "Goal not found." };
+  const parsed = goalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid goal." };
+  const weekOf = parsed.data.weekOf ? dayFromISO(parsed.data.weekOf) : goal.weekOf;
+  const target = parsed.data.target;
+  const current = Math.min(goal.current, target);
+  await prisma.weeklyGoal.update({
+    where: { id: goalId },
+    data: {
+      title: parsed.data.title,
+      metricLabel: parsed.data.metricLabel,
+      target,
+      current,
+      weekOf,
+      deadline: addDays(weekOf, 4),
+      status: goalStatusFor(current, target),
+    },
+  });
+  revalidateEmployee();
+  return { ok: true };
+}
+
+export async function deleteGoalAction(goalId: string): Promise<Result> {
+  const user = await currentUserOrThrow();
+  const goal = await prisma.weeklyGoal.findUnique({ where: { id: goalId } });
+  if (!goal || goal.userId !== user.id) return { ok: false, error: "Goal not found." };
+  await prisma.weeklyGoal.delete({ where: { id: goalId } });
   revalidateEmployee();
   return { ok: true };
 }

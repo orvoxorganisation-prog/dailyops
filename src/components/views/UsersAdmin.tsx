@@ -43,7 +43,7 @@ import {
 import { Avatar, PageHeader, Tag } from "@/components/common";
 import { ExportButton } from "@/components/ExportButton";
 import { cn } from "@/lib/utils";
-import { relativeTime, roleLabel } from "@/lib/format";
+import { relativeTime, roleLabel, weekOptions } from "@/lib/format";
 import { useActions } from "@/lib/useActions";
 import type { AuditEntry, User } from "@/lib/types";
 
@@ -299,15 +299,17 @@ function AssignTaskDialog({ user, onClose }: { user: User; onClose: () => void }
 
 function SetGoalDialog({ user, onClose }: { user: User; onClose: () => void }) {
   const { setWeeklyGoal } = useActions();
+  const weeks = weekOptions(6);
   const [title, setTitle] = useState("");
   const [metricLabel, setMetricLabel] = useState("");
   const [target, setTarget] = useState(5);
+  const [weekOf, setWeekOf] = useState(weeks[0]?.value ?? "");
   const [busy, setBusy] = useState(false);
   const first = user.name.split(" ")[0];
 
   const save = async () => {
     setBusy(true);
-    const res = await setWeeklyGoal(user.id, { title, metricLabel, target: Number(target) });
+    const res = await setWeeklyGoal(user.id, { title, metricLabel, target: Number(target), weekOf });
     setBusy(false);
     if (res.ok) onClose();
   };
@@ -326,6 +328,17 @@ function SetGoalDialog({ user, onClose }: { user: User; onClose: () => void }) {
             <Label className="mb-1.5 block text-sm">Goal</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ship the onboarding redesign" autoFocus />
           </div>
+          <div>
+            <Label className="mb-1.5 block text-sm">Which week?</Label>
+            <Select value={weekOf} onValueChange={setWeekOf}>
+              <SelectTrigger><SelectValue placeholder="Choose a week" /></SelectTrigger>
+              <SelectContent>
+                {weeks.map((w) => (
+                  <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="mb-1.5 block text-sm">Metric</Label>
@@ -339,7 +352,7 @@ function SetGoalDialog({ user, onClose }: { user: User; onClose: () => void }) {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={busy || !title.trim() || !metricLabel.trim()}>Set goal</Button>
+          <Button onClick={save} disabled={busy || !title.trim() || !metricLabel.trim() || !weekOf}>Set goal</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

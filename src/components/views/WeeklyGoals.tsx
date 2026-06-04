@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Minus, Plus, Target, TrendingUp } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, CheckCircle2, Minus, MoreHorizontal, Pencil, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,21 +10,36 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScoreRing, Meter, TONE_HEX } from "@/components/charts";
 import { PageHeader, EmptyState, GoalStatusPill } from "@/components/common";
 import { cn } from "@/lib/utils";
-import { prettyDate } from "@/lib/format";
+import { prettyDate, weekOptions, weekRangeLabel } from "@/lib/format";
 import { useActions } from "@/lib/useActions";
 import type { GoalStatus, Task, WeeklyGoal } from "@/lib/types";
 
 const goalTone = (s: GoalStatus) => (s === "behind" ? "critical" : s === "at_risk" ? "warning" : "success");
 
 export function WeeklyGoals({ goals, tasks }: { goals: WeeklyGoal[]; tasks: Task[] }) {
-  const { adjustGoal } = useActions();
+  const { adjustGoal, deleteGoal } = useActions();
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<WeeklyGoal | null>(null);
 
   const avg = goals.length ? Math.round(goals.reduce((a, g) => a + Math.min(100, (g.current / g.target) * 100), 0) / goals.length) : 0;
   const byStatus = (s: GoalStatus) => goals.filter((g) => g.status === s).length;
@@ -34,21 +49,21 @@ export function WeeklyGoals({ goals, tasks }: { goals: WeeklyGoal[]; tasks: Task
     <div className="space-y-6">
       <PageHeader
         title="Weekly Goals"
-        description="Set measurable goals for the week and keep them on pace."
+        description="Set measurable goals, choose which week they're for, and keep them on pace."
         actions={<Button onClick={() => setCreating(true)}><Plus className="mr-1.5 h-4 w-4" /> New goal</Button>}
       />
 
       {goals.length === 0 ? (
-        <EmptyState icon={<Target className="h-5 w-5" />} title="No goals this week" description="Create a weekly goal to track measurable progress." action={<Button onClick={() => setCreating(true)}><Plus className="mr-1.5 h-4 w-4" /> New goal</Button>} />
+        <EmptyState icon={<Target className="h-5 w-5" />} title="No goals yet" description="Create a weekly goal to track measurable progress." action={<Button onClick={() => setCreating(true)}><Plus className="mr-1.5 h-4 w-4" /> New goal</Button>} />
       ) : (
         <>
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="flex items-center gap-4 rounded-xl border bg-card p-5">
               <ScoreRing value={avg} color={TONE_HEX[avg >= 70 ? "success" : avg >= 45 ? "warning" : "critical"]} size={84} stroke={8} label={`${avg}%`} sublabel="avg" />
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Week completion</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Average completion</p>
                 <p className="font-display text-lg font-semibold">{goals.length} active goal{goals.length > 1 ? "s" : ""}</p>
-                {deadline && <p className="mt-0.5 text-sm text-muted-foreground">Due {prettyDate(deadline)}</p>}
+                {deadline && <p className="mt-0.5 text-sm text-muted-foreground">Next due {prettyDate(deadline)}</p>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 lg:col-span-2">
@@ -61,18 +76,38 @@ export function WeeklyGoals({ goals, tasks }: { goals: WeeklyGoal[]; tasks: Task
 
           <div className="grid gap-4 lg:grid-cols-2">
             {goals.map((g) => (
-              <GoalCard key={g.id} goal={g} tasks={tasks.filter((t) => t.goalId === g.id)} onAdjust={(d) => adjustGoal(g.id, d)} />
+              <GoalCard
+                key={g.id}
+                goal={g}
+                tasks={tasks.filter((t) => t.goalId === g.id)}
+                onAdjust={(d) => adjustGoal(g.id, d)}
+                onEdit={() => setEditing(g)}
+                onDelete={() => deleteGoal(g.id)}
+              />
             ))}
           </div>
         </>
       )}
 
       <GoalDialog open={creating} onOpenChange={setCreating} />
+      {editing && <GoalDialog open onOpenChange={(v) => !v && setEditing(null)} goal={editing} />}
     </div>
   );
 }
 
-function GoalCard({ goal, tasks, onAdjust }: { goal: WeeklyGoal; tasks: Task[]; onAdjust: (delta: number) => void }) {
+function GoalCard({
+  goal,
+  tasks,
+  onAdjust,
+  onEdit,
+  onDelete,
+}: {
+  goal: WeeklyGoal;
+  tasks: Task[];
+  onAdjust: (delta: number) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const pct = Math.min(100, Math.round((goal.current / goal.target) * 100));
   const tone = goalTone(goal.status);
   const linkedDone = tasks.filter((t) => t.status === "completed").length;
@@ -85,9 +120,22 @@ function GoalCard({ goal, tasks, onAdjust }: { goal: WeeklyGoal; tasks: Task[]; 
           <div>
             <h3 className="font-display font-semibold leading-tight">{goal.title}</h3>
             <p className="mt-0.5 text-xs capitalize text-muted-foreground">{goal.metricLabel}</p>
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="h-3 w-3" /> {weekRangeLabel(goal.weekOf)}</p>
           </div>
         </div>
-        <GoalStatusPill status={goal.status} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <GoalStatusPill status={goal.status} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={onEdit}><Pencil className="mr-2 h-4 w-4" /> Edit goal</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete goal</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="mt-4">
@@ -127,21 +175,34 @@ function GoalCard({ goal, tasks, onAdjust }: { goal: WeeklyGoal; tasks: Task[]; 
   );
 }
 
-function GoalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const { createGoal } = useActions();
-  const [title, setTitle] = useState("");
-  const [metricLabel, setMetricLabel] = useState("");
-  const [target, setTarget] = useState(5);
+function GoalDialog({ open, onOpenChange, goal }: { open: boolean; onOpenChange: (v: boolean) => void; goal?: WeeklyGoal }) {
+  const { createGoal, updateGoal } = useActions();
+  const weeks = useMemo(() => {
+    const opts = weekOptions(6);
+    // When editing a goal whose week isn't in the upcoming list (e.g. a past week), include it.
+    if (goal && !opts.some((o) => o.value === goal.weekOf)) {
+      return [{ value: goal.weekOf, label: `${weekRangeLabel(goal.weekOf)} (current)` }, ...opts];
+    }
+    return opts;
+  }, [goal]);
+
+  const [title, setTitle] = useState(goal?.title ?? "");
+  const [metricLabel, setMetricLabel] = useState(goal?.metricLabel ?? "");
+  const [target, setTarget] = useState(goal?.target ?? 5);
+  const [weekOf, setWeekOf] = useState(goal?.weekOf ?? weeks[0]?.value ?? "");
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     setBusy(true);
-    const res = await createGoal({ title, metricLabel, target: Number(target) });
+    const payload = { title, metricLabel, target: Number(target), weekOf };
+    const res = goal ? await updateGoal(goal.id, payload) : await createGoal(payload);
     setBusy(false);
     if (res.ok) {
-      setTitle("");
-      setMetricLabel("");
-      setTarget(5);
+      if (!goal) {
+        setTitle("");
+        setMetricLabel("");
+        setTarget(5);
+      }
       onOpenChange(false);
     }
   };
@@ -150,13 +211,24 @@ function GoalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display">New weekly goal</DialogTitle>
-          <DialogDescription>Set a measurable target for this week.</DialogDescription>
+          <DialogTitle className="font-display">{goal ? "Edit weekly goal" : "New weekly goal"}</DialogTitle>
+          <DialogDescription>Set a measurable target and choose which week it&apos;s for.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-1">
           <div>
             <Label className="mb-1.5 block text-sm">Goal</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ship the onboarding redesign" />
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ship the onboarding redesign" autoFocus />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-sm">Which week?</Label>
+            <Select value={weekOf} onValueChange={setWeekOf}>
+              <SelectTrigger><SelectValue placeholder="Choose a week" /></SelectTrigger>
+              <SelectContent>
+                {weeks.map((w) => (
+                  <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -171,7 +243,7 @@ function GoalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={busy || !title.trim() || !metricLabel.trim()}>Create goal</Button>
+          <Button onClick={save} disabled={busy || !title.trim() || !metricLabel.trim() || !weekOf}>{goal ? "Save goal" : "Create goal"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

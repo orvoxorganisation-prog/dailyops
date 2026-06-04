@@ -1,9 +1,12 @@
 import {
+  addDays,
+  addWeeks,
   differenceInCalendarDays,
   format,
   isToday,
   isYesterday,
   parseISO,
+  startOfWeek,
 } from "date-fns";
 import type {
   GoalStatus,
@@ -26,6 +29,24 @@ export function prettyDate(iso: string): string {
 
 export function shortDate(iso: string): string {
   return format(parseISO(iso), "MMM d");
+}
+
+/** Mon-start week options for the next `count` weeks, for picking which week a goal targets. */
+export function weekOptions(count = 6): { value: string; label: string }[] {
+  const thisMonday = startOfWeek(new Date(), { weekStartsOn: 1 });
+  return Array.from({ length: count }, (_, i) => {
+    const mon = addWeeks(thisMonday, i);
+    const fri = addDays(mon, 4);
+    const range = `${format(mon, "MMM d")} – ${format(fri, "MMM d")}`;
+    const label = i === 0 ? `This week · ${range}` : i === 1 ? `Next week · ${range}` : range;
+    return { value: format(mon, "yyyy-MM-dd"), label };
+  });
+}
+
+/** "MMM d – MMM d" Mon→Fri range for a goal's weekOf date. */
+export function weekRangeLabel(weekOfISO: string): string {
+  const mon = parseISO(weekOfISO);
+  return `${format(mon, "MMM d")} – ${format(addDays(mon, 4), "MMM d")}`;
 }
 
 export function relativeTime(iso: string): string {

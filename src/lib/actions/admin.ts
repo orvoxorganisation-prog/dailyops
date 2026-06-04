@@ -273,6 +273,7 @@ const setGoalSchema = z.object({
   title: z.string().trim().min(1, "Give the goal a title.").max(200),
   metricLabel: z.string().trim().min(1, "Add a metric (e.g. PRs merged).").max(60),
   target: z.number().int().min(1, "Target must be at least 1.").max(1000),
+  weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
 });
 
 /** Admin sets this week's goal for a member. */
@@ -282,7 +283,7 @@ export async function setWeeklyGoalAction(userId: string, input: unknown): Promi
   if (!target || !target.active || target.deletedAt) return { ok: false, error: "User not found." };
   const parsed = setGoalSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid goal." };
-  const weekOf = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekOf = parsed.data.weekOf ? dayFromISO(parsed.data.weekOf) : startOfWeek(new Date(), { weekStartsOn: 1 });
   await prisma.weeklyGoal.create({
     data: {
       userId,

@@ -36,7 +36,9 @@ export function useActions() {
     deleteTask: (id: string) => run(emp.deleteTaskAction(id), "Task deleted"),
     // goals
     createGoal: (input: unknown) => run(emp.createGoalAction(input), "Goal created"),
+    updateGoal: (id: string, input: unknown) => run(emp.updateGoalAction(id, input), "Goal updated"),
     adjustGoal: (id: string, delta: number) => run(emp.adjustGoalAction(id, delta)),
+    deleteGoal: (id: string) => run(emp.deleteGoalAction(id), "Goal deleted"),
     // proof
     addProof: (input: unknown) => run(emp.addProofAction(input), "Proof added to library"),
     removeProof: (id: string) => run(emp.removeProofAction(id), "Proof removed"),
