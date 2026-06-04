@@ -60,6 +60,8 @@ export function useActions() {
     setUserRole: (id: string, role: "admin" | "employee") => run(adm.setUserRoleAction(id, role), "Role updated"),
     setUserActive: (id: string, active: boolean) => run(adm.setUserActiveAction(id, active), active ? "User reactivated" : "User disabled"),
     deleteUser: (id: string) => run(adm.deleteUserAction(id), "User deleted"),
+    permanentlyDeleteUser: (id: string) =>
+      run(adm.permanentDeleteUserAction(id), "Account permanently deleted", "All of the account's data was erased and its email freed."),
     updateSettings: (input: unknown) => run(adm.updateSettingsAction(input), "Settings saved"),
   };
 }

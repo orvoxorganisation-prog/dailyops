@@ -171,6 +171,46 @@ export async function deleteUserAction(userId: string): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * Hard delete — permanently erases the account and ALL of its owned data.
+ * Every ownership relation on User is ON DELETE CASCADE (daily reports, proof,
+ * tasks + their progress notes, weekly goals, notifications, password-reset
+ * tokens), so this removes exactly this user's data and nothing else: other
+ * members' records and company settings are untouched. The unique email is
+ * freed, so it can be used for a brand-new signup. Irreversible.
+ */
+export async function permanentDeleteUserAction(userId: string): Promise<Result> {
+  const admin = await adminOrThrow();
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) return { ok: false, error: "User not found." };
+  if (target.id === admin.id) {
+    return { ok: false, error: "You can't permanently delete your own account." };
+  }
+  if (await wouldRemoveLastAdmin(userId)) {
+    return { ok: false, error: "You can't delete the last remaining admin." };
+  }
+
+  // Capture identity for the audit trail before the row is gone. The audit
+  // log's target FK is SET NULL on delete, so we keep the details in metadata.
+  const snapshot = { name: target.name, email: target.email, role: target.role };
+
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch {
+    return { ok: false, error: "Could not permanently delete this account. Please try again." };
+  }
+
+  await writeAudit({
+    action: "user.permanently_deleted",
+    actorId: admin.id,
+    entity: "User",
+    entityId: userId,
+    metadata: snapshot,
+  });
+  revalidateAdmin();
+  return { ok: true };
+}
+
 // ── Company settings ─────────────────────────────────────────────────────────
 const settingsSchema = z.object({
   name: z.string().trim().min(1).max(120),

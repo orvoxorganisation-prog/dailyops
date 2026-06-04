@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
+  Eraser,
   MoreHorizontal,
   Pencil,
   Power,
@@ -22,6 +24,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -46,6 +49,7 @@ export function UsersAdmin({
   const { setUserRole, setUserActive, deleteUser } = useActions();
   const [editing, setEditing] = useState<User | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
+  const [confirmPurge, setConfirmPurge] = useState<User | null>(null);
 
   const visible = users.filter((u) => !u.deleted);
   const deleted = users.filter((u) => u.deleted);
@@ -93,26 +97,40 @@ export function UsersAdmin({
               </div>
               <div className="hidden text-xs text-muted-foreground md:block">{u.lastLoginAt ? relativeTime(u.lastLoginAt) : "Never"}</div>
               <div className="flex justify-end">
-                {!u.deleted && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="mr-2 h-4 w-4" /> Edit details</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setUserRole(u.id, u.role === "admin" ? "employee" : "admin")}>
-                        <UserCog className="mr-2 h-4 w-4" /> {u.role === "admin" ? "Make employee" : "Make admin"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setUserActive(u.id, !u.active)}>
-                        <Power className="mr-2 h-4 w-4" /> {u.active ? "Disable access" : "Reactivate"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDelete(u)}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete user
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    {!u.deleted ? (
+                      <>
+                        <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="mr-2 h-4 w-4" /> Edit details</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setUserRole(u.id, u.role === "admin" ? "employee" : "admin")}>
+                          <UserCog className="mr-2 h-4 w-4" /> {u.role === "admin" ? "Make employee" : "Make admin"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setUserActive(u.id, !u.active)}>
+                          <Power className="mr-2 h-4 w-4" /> {u.active ? "Disable access" : "Reactivate"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDelete(u)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete user
+                        </DropdownMenuItem>
+                      </>
+                    ) : (
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                        Soft-deleted · access revoked
+                      </DropdownMenuLabel>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={u.id === currentUserId}
+                      onClick={() => setConfirmPurge(u)}
+                    >
+                      <Eraser className="mr-2 h-4 w-4" /> Permanently delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </li>
           ))}
@@ -162,6 +180,7 @@ export function UsersAdmin({
           </DialogContent>
         </Dialog>
       )}
+      {confirmPurge && <PurgeUserDialog user={confirmPurge} onClose={() => setConfirmPurge(null)} />}
     </div>
   );
 }
@@ -206,6 +225,72 @@ function EditUserDialog({ user, onClose }: { user: User; onClose: () => void }) 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={save} disabled={busy || !name.trim()}>Save changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PurgeUserDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const { permanentlyDeleteUser } = useActions();
+  const [confirmText, setConfirmText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const armed = confirmText.trim().toLowerCase() === user.email.trim().toLowerCase();
+
+  const purge = async () => {
+    if (!armed || busy) return;
+    setBusy(true);
+    const res = await permanentlyDeleteUser(user.id);
+    setBusy(false);
+    if (res.ok) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display text-destructive">
+            <AlertTriangle className="h-5 w-5 shrink-0" /> Permanently delete {user.name}?
+          </DialogTitle>
+          <DialogDescription>
+            This cannot be undone. It erases the account and all of its data, and frees{" "}
+            <span className="font-medium text-foreground">{user.email}</span> for a new signup.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-1 text-sm">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+            <p className="mb-1.5 font-medium text-foreground">Erased permanently</p>
+            <ul className="ml-4 list-disc space-y-0.5 text-muted-foreground">
+              <li>Daily reports &amp; proof of work</li>
+              <li>Tasks &amp; progress notes</li>
+              <li>Weekly goals</li>
+              <li>Notifications</li>
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Other members&apos; data and company settings are not affected.
+            </p>
+          </div>
+          <div>
+            <Label className="mb-1.5 block">
+              Type <span className="font-mono text-foreground">{user.email}</span> to confirm
+            </Label>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && purge()}
+              placeholder={user.email}
+              autoComplete="off"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" disabled={!armed || busy} onClick={purge}>
+            {busy ? "Erasing…" : "Permanently delete"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
