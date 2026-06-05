@@ -203,6 +203,52 @@ export function companyKpis(ds: Dataset): CompanyKpis {
   };
 }
 
+function datesBetween(fromISO: string, toISO: string): string[] {
+  const out: string[] = [];
+  const cur = parseISO(fromISO);
+  const end = parseISO(toISO);
+  for (let i = 0; cur <= end && i < 400; i++) {
+    out.push(format(cur, "yyyy-MM-dd"));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+export interface RangeKpis {
+  reports: number;
+  expected: number;
+  missing: User[];
+  tasksCompleted: number;
+  singleDay: boolean;
+}
+
+/** Period-aware company metrics for an inclusive [fromISO, toISO] date range.
+ *  Expected counts only weekdays, members who existed, and excludes approved leave. */
+export function companyKpisForRange(ds: Dataset, fromISO: string, toISO: string): RangeKpis {
+  const team = reportingUsers(ds);
+  const teamIds = new Set(team.map((u) => u.id));
+  const reportsInRange = ds.reports.filter((r) => teamIds.has(r.userId) && r.date >= fromISO && r.date <= toISO);
+  const reporterIds = new Set(reportsInRange.map((r) => r.userId));
+
+  let expected = 0;
+  for (const d of datesBetween(fromISO, toISO)) {
+    if (!isWeekday(parseISO(d))) continue;
+    for (const u of team) {
+      if (u.createdAt.slice(0, 10) <= d && !onLeave(ds, u.id, d)) expected++;
+    }
+  }
+
+  const missing = team.filter(
+    (u) => !reporterIds.has(u.id) && u.createdAt.slice(0, 10) <= toISO && !onLeave(ds, u.id, toISO)
+  );
+
+  const tasksCompleted = ds.tasks.filter(
+    (t) => t.completedAt && t.completedAt.slice(0, 10) >= fromISO && t.completedAt.slice(0, 10) <= toISO
+  ).length;
+
+  return { reports: reportsInRange.length, expected, missing, tasksCompleted, singleDay: fromISO === toISO };
+}
+
 export interface TrendPoint {
   date: string;
   value: number;

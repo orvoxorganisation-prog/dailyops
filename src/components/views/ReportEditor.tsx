@@ -1,12 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   CheckCircle2,
   Circle,
-  FileUp,
   Link2,
   Paperclip,
   ShieldCheck,
@@ -44,13 +43,6 @@ const MOODS: Mood[] = ["great", "good", "ok", "rough"];
 const HOUR_CHIPS = [4, 6, 7.5, 8, 9];
 const uid = () => `pf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 
-function fileToType(name: string): ProofType {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext))
-    return name.toLowerCase().includes("screenshot") ? "screenshot" : "image";
-  return "document";
-}
-
 interface FormData {
   completedToday: string;
   progressMade: string;
@@ -75,7 +67,6 @@ export function ReportEditor({
   existing?: DailyReport;
 }) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<FormData>(() => ({
     completedToday: existing?.completedToday ?? "",
@@ -89,7 +80,7 @@ export function ReportEditor({
     mood: existing?.mood ?? "good",
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [linkType, setLinkType] = useState<ProofType>("link");
+  const [linkType, setLinkType] = useState<ProofType>("document");
   const [linkUrl, setLinkUrl] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -97,23 +88,12 @@ export function ReportEditor({
   const addProofItems = (items: ProofItem[]) => set("proof", [...form.proof, ...items]);
   const removeProof = (id: string) => set("proof", form.proof.filter((p) => p.id !== id));
 
-  const onFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-    const items: ProofItem[] = Array.from(files).map((f) => ({
-      id: uid(),
-      type: fileToType(f.name),
-      label: f.name,
-      url: `local://${f.name}`,
-      addedAt: new Date().toISOString(),
-    }));
-    addProofItems(items);
-    toast.success(`${items.length} file${items.length > 1 ? "s" : ""} attached`);
-  };
-
   const addLink = () => {
-    if (!linkUrl.trim()) return;
-    const labelMap: Record<string, string> = { link: "Link", github: "GitHub commit", loom: "Loom recording" };
-    addProofItems([{ id: uid(), type: linkType, label: labelMap[linkType] ?? linkUrl.replace(/^https?:\/\//, "").slice(0, 40), url: linkUrl.trim(), addedAt: new Date().toISOString() }]);
+    let url = linkUrl.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`; // normalize so the link is always openable
+    const labelMap: Record<string, string> = { document: "Google Drive", link: "Link", github: "GitHub commit", loom: "Loom recording" };
+    addProofItems([{ id: uid(), type: linkType, label: labelMap[linkType] ?? url.replace(/^https?:\/\//, "").slice(0, 40), url, addedAt: new Date().toISOString() }]);
     setLinkUrl("");
   };
 
@@ -236,22 +216,21 @@ export function ReportEditor({
                 </ul>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input ref={fileRef} type="file" multiple hidden onChange={(e) => onFiles(e.target.files)} />
-                <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}><FileUp className="mr-1.5 h-3.5 w-3.5" /> Upload file</Button>
-              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Paste a shareable <span className="font-medium text-foreground">link</span> to your work — a Google Drive file/folder, GitHub PR, Loom, or any URL. Make sure link sharing is on so admins can open it.
+              </p>
 
               <div className="mt-2 flex items-center gap-2">
                 <Select value={linkType} onValueChange={(v) => setLinkType(v as ProofType)}>
-                  <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="document">Google Drive</SelectItem>
                     <SelectItem value="link">Link</SelectItem>
                     <SelectItem value="github">GitHub</SelectItem>
                     <SelectItem value="loom">Loom</SelectItem>
-                    <SelectItem value="screenshot">Screenshot</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addLink())} placeholder="https://github.com/org/repo/pull/482" className="h-9 flex-1" />
+                <Input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addLink())} placeholder="https://drive.google.com/…" className="h-9 flex-1" />
                 <Button type="button" size="sm" variant="secondary" onClick={addLink} disabled={!linkUrl.trim()}><Link2 className="mr-1 h-3.5 w-3.5" /> Add</Button>
               </div>
               {err("proof") && <p className="mt-2 text-xs text-destructive">{err("proof")}</p>}

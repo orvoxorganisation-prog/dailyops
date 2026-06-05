@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { startOfWeek, format } from "date-fns";
+import { startOfWeek, subDays, format } from "date-fns";
 import { Inbox } from "lucide-react";
 import {
   Select,
@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { EmptyState, PageHeader } from "@/components/common";
 import { ExportButton } from "@/components/ExportButton";
 import { ReportCard } from "./ReportCard";
@@ -23,15 +24,29 @@ export function AllReports({ data }: { data: Dataset }) {
 
   const [who, setWho] = useState<string>("all");
   const [status, setStatus] = useState<"all" | "flagged" | "clean">("all");
-  const [period, setPeriod] = useState<"today" | "week" | "all">("today");
+  const [period, setPeriod] = useState<"today" | "yesterday" | "week" | "all" | "custom">("today");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const today = todayISO();
+  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
   const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+
+  const inPeriod = (date: string) => {
+    if (period === "all") return true;
+    if (period === "today") return date === today;
+    if (period === "yesterday") return date === yesterday;
+    if (period === "week") return date >= weekStart;
+    // custom — either bound is optional
+    if (customFrom && date < customFrom) return false;
+    if (customTo && date > customTo) return false;
+    return true;
+  };
 
   const reports = data.reports
     .filter((r) => (who === "all" ? true : r.userId === who))
     .filter((r) => (status === "all" ? true : status === "flagged" ? r.flagged : !r.flagged))
-    .filter((r) => (period === "all" ? true : period === "today" ? r.date === today : r.date >= weekStart))
+    .filter((r) => inPeriod(r.date))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.userId < b.userId ? -1 : 1));
 
   const flaggedCount = reports.filter((r) => r.flagged).length;
@@ -78,10 +93,18 @@ export function AllReports({ data }: { data: Dataset }) {
               <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
                 <SelectItem value="week">This week</SelectItem>
                 <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="custom">Custom…</SelectItem>
               </SelectContent>
             </Select>
+            {period === "custom" && (
+              <>
+                <Input type="date" value={customFrom} max={customTo || today} onChange={(e) => setCustomFrom(e.target.value)} className="w-[150px]" aria-label="From date" />
+                <Input type="date" value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} className="w-[150px]" aria-label="To date" />
+              </>
+            )}
           </div>
         }
       />
