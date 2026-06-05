@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Building2,
   CalendarOff,
+  ClipboardList,
   FileText,
   Gauge,
   Inbox,
@@ -38,6 +39,7 @@ const adminNav: NavItem[] = [
   { href: "/performance", label: "Performance", icon: Gauge },
   { href: "/analytics", label: "Team Analytics", icon: TrendingUp },
   { href: "/all-reports", label: "All Reports", icon: Inbox },
+  { href: "/admin/assignments", label: "Tasks & Goals", icon: ClipboardList },
   { href: "/admin/users", label: "Employees", icon: Users },
   { href: "/admin/leave", label: "Leave", icon: CalendarOff },
   { href: "/settings", label: "Settings", icon: Settings },
