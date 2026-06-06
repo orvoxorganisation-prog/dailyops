@@ -18,12 +18,12 @@ import { scoreLabel, scoreTone, shortDate } from "@/lib/format";
 import { computeAllMetrics, lastNDates } from "@/lib/scoring";
 import type { Dataset, EmployeeMetrics } from "@/lib/types";
 
-type SortKey = "score" | "reportStreak" | "weeklyCompletionRate" | "sopComplianceScore" | "tasksCompleted";
+type SortKey = "score" | "reportStreak" | "weeklyCompletionRate" | "qualityScore" | "tasksCompleted";
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "score", label: "Productivity score" },
   { key: "reportStreak", label: "Report streak" },
   { key: "weeklyCompletionRate", label: "Weekly completion" },
-  { key: "sopComplianceScore", label: "SOP compliance" },
+  { key: "qualityScore", label: "Quality" },
   { key: "tasksCompleted", label: "Tasks completed" },
 ];
 
@@ -53,7 +53,8 @@ export function Performance({ data }: { data: Dataset }) {
                 report_streak_days: m.reportStreak,
                 reports: `${m.reportsThisCycle}/${m.reportsExpected}`,
                 weekly_completion_pct: m.weeklyCompletionRate,
-                sop_compliance_pct: m.sopComplianceScore,
+                quality_pct: m.qualityScore,
+                tasks_done_score: m.score.tasksDone,
                 tasks_completed: m.tasksCompleted,
                 tasks_total: m.tasksTotal,
                 open_blockers: m.openBlockers,
@@ -78,7 +79,7 @@ export function Performance({ data }: { data: Dataset }) {
           <span className="text-center">Streak</span>
           <span className="text-center">Tasks</span>
           <span className="text-center">Weekly</span>
-          <span className="text-center">SOP</span>
+          <span className="text-center">Quality</span>
           <span className="text-center">Score</span>
           <span />
         </div>
@@ -112,7 +113,7 @@ function PerformanceRow({ m, rank, open, onToggle }: { m: EmployeeMetrics; rank:
         </Cell>
         <Cell className="hidden lg:flex"><span className="tnum">{m.tasksCompleted}/{m.tasksTotal}</span></Cell>
         <Cell className="hidden lg:flex"><span className="tnum">{m.weeklyCompletionRate}%</span></Cell>
-        <Cell className="hidden lg:flex"><span className="tnum">{m.sopComplianceScore}%</span></Cell>
+        <Cell className="hidden lg:flex"><span className="tnum">{m.qualityScore}%</span></Cell>
         <div className="flex items-center justify-end gap-2 lg:justify-center">
           <Sparkline values={m.trend} color={color} width={56} height={24} fill={false} />
           <span className="font-display text-lg font-semibold tnum" style={{ color }}>{m.score.total}</span>
@@ -128,9 +129,9 @@ function PerformanceRow({ m, rank, open, onToggle }: { m: EmployeeMetrics; rank:
               {([
                 ["Report consistency", m.score.reportConsistency],
                 ["Task completion", m.score.taskCompletion],
+                ["Tasks done", m.score.tasksDone],
                 ["Weekly goals", m.score.goalCompletion],
-                ["Blocker control", m.score.blockerControl],
-                ["SOP compliance", m.score.sopCompliance],
+                ["Quality", m.score.quality],
               ] as const).map(([label, v]) => (
                 <li key={label}>
                   <div className="mb-1 flex justify-between text-sm">

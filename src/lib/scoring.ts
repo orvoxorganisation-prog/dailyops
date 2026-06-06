@@ -16,11 +16,14 @@ import type {
 
 const SCORE_WEIGHTS = {
   reportConsistency: 0.25,
-  taskCompletion: 0.25,
+  taskCompletion: 0.2,
+  tasksDone: 0.15,
   goalCompletion: 0.2,
-  blockerControl: 0.15,
-  sopCompliance: 0.15,
+  quality: 0.2,
 };
+
+// Completing this many tasks within the 14-day cycle earns full "tasks done" marks.
+const TASKS_DONE_TARGET = 8;
 
 const isWeekday = (d: Date) => {
   const g = getDay(d);
@@ -108,23 +111,27 @@ export function scoreBreakdown(ds: Dataset, id: string): ScoreBreakdown {
   const completed = tasks.filter((t) => t.status === "completed").length;
   const taskCompletion = total ? clamp(pct(completed, total)) : 0;
 
-  const goalCompletion = goalCompletionForUser(ds, id);
-  const openBlockers = tasks.filter((t) => t.status === "blocked").length;
-  const blockerControl = clamp(100 - openBlockers * 22);
+  // Volume of tasks completed within the cycle (TASKS_DONE_TARGET = full marks).
+  const cycleSet = new Set(cycle);
+  const tasksDoneInCycle = tasks.filter((t) => t.completedAt && cycleSet.has(t.completedAt.slice(0, 10))).length;
+  const tasksDone = clamp((tasksDoneInCycle / TASKS_DONE_TARGET) * 100);
 
-  const cycleReports = reports.filter((r) => cycle.includes(r.date));
-  const sopOk = cycleReports.filter((r) => r.sopFollowed).length;
-  const sopCompliance = cycleReports.length ? clamp(pct(sopOk, cycleReports.length)) : 100;
+  const goalCompletion = goalCompletionForUser(ds, id);
+
+  // Quality = share of cycle reports that passed admin review (i.e. were not flagged).
+  const cycleReports = reports.filter((r) => cycleSet.has(r.date));
+  const clean = cycleReports.filter((r) => !r.flagged).length;
+  const quality = cycleReports.length ? clamp(pct(clean, cycleReports.length)) : 100;
 
   const total100 = Math.round(
     reportConsistency * SCORE_WEIGHTS.reportConsistency +
       taskCompletion * SCORE_WEIGHTS.taskCompletion +
+      tasksDone * SCORE_WEIGHTS.tasksDone +
       goalCompletion * SCORE_WEIGHTS.goalCompletion +
-      blockerControl * SCORE_WEIGHTS.blockerControl +
-      sopCompliance * SCORE_WEIGHTS.sopCompliance
+      quality * SCORE_WEIGHTS.quality
   );
 
-  return { reportConsistency, taskCompletion, goalCompletion, blockerControl, sopCompliance, total: clamp(total100) };
+  return { reportConsistency, taskCompletion, tasksDone, goalCompletion, quality, total: clamp(total100) };
 }
 
 export function computeMetrics(ds: Dataset, user: User): EmployeeMetrics {
@@ -148,7 +155,7 @@ export function computeMetrics(ds: Dataset, user: User): EmployeeMetrics {
     tasksBlocked: tasks.filter((t) => t.status === "blocked").length,
     weeklyCompletionRate: goalCompletionForUser(ds, user.id),
     openBlockers: tasks.filter((t) => t.status === "blocked").length,
-    sopComplianceScore: score.sopCompliance,
+    qualityScore: score.quality,
     score,
     submittedToday: have.has(today),
     flaggedToday: reports.some((r) => r.date === today && r.flagged),

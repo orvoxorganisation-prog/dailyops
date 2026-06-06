@@ -118,9 +118,9 @@ export interface Notification {
 export interface ScoreBreakdown {
   reportConsistency: number;
   taskCompletion: number;
+  tasksDone: number;
   goalCompletion: number;
-  blockerControl: number;
-  sopCompliance: number;
+  quality: number;
   total: number;
 }
 
@@ -134,7 +134,7 @@ export interface EmployeeMetrics {
   tasksBlocked: number;
   weeklyCompletionRate: number;
   openBlockers: number;
-  sopComplianceScore: number;
+  qualityScore: number;
   score: ScoreBreakdown;
   submittedToday: boolean;
   flaggedToday: boolean;

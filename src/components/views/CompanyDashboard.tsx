@@ -96,7 +96,7 @@ export function CompanyDashboard({ data, companyName }: { data: Dataset; company
               report_streak_days: m.reportStreak,
               reports: `${m.reportsThisCycle}/${m.reportsExpected}`,
               weekly_completion_pct: m.weeklyCompletionRate,
-              sop_compliance_pct: m.sopComplianceScore,
+              quality_pct: m.qualityScore,
               tasks_completed: m.tasksCompleted,
               tasks_total: m.tasksTotal,
               open_blockers: m.openBlockers,

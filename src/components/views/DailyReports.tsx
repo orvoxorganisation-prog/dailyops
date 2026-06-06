@@ -39,7 +39,7 @@ export function DailyReports({ user, reports }: { user: User; reports: DailyRepo
   const stats = [
     { label: "Streak", value: `${m.reportStreak}d`, icon: Flame, tone: "text-amber-600" },
     { label: "This cycle", value: `${m.reportsThisCycle}/${m.reportsExpected}`, icon: CalendarCheck, tone: "text-teal-600" },
-    { label: "SOP compliance", value: `${m.sopComplianceScore}%`, icon: ShieldCheck, tone: "text-sky-600" },
+    { label: "Quality", value: `${m.qualityScore}%`, icon: ShieldCheck, tone: "text-sky-600" },
     { label: "Avg hours", value: `${avgHours}h`, icon: Clock, tone: "text-violet-600" },
   ];
 

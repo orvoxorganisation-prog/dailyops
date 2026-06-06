@@ -28,9 +28,9 @@ import type { Dataset, ScoreBreakdown, User } from "@/lib/types";
 const BREAKDOWN: { key: keyof ScoreBreakdown; label: string }[] = [
   { key: "reportConsistency", label: "Report consistency" },
   { key: "taskCompletion", label: "Task completion" },
+  { key: "tasksDone", label: "Tasks done" },
   { key: "goalCompletion", label: "Weekly goals" },
-  { key: "blockerControl", label: "Blocker control" },
-  { key: "sopCompliance", label: "SOP compliance" },
+  { key: "quality", label: "Quality" },
 ];
 
 export function EmployeeDashboard({ user, data }: { user: User; data: Dataset }) {
