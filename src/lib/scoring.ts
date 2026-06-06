@@ -101,10 +101,13 @@ export function scoreBreakdown(ds: Dataset, id: string): ScoreBreakdown {
   const reports = uReports(ds, id);
   const tasks = uTasks(ds, id);
   const cycle = lastNDates(14);
-  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && !onLeave(ds, id, d));
+  const joined = (ds.users.find((u) => u.id === id)?.createdAt ?? "").slice(0, 10);
+  // Expected = weekdays since the member joined, excluding approved leave.
+  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && d >= joined && !onLeave(ds, id, d));
   const expected = workdays.length;
   const have = new Set(reports.map((r) => r.date));
-  const submitted = workdays.filter((d) => have.has(d)).length;
+  // Credit every cycle day the member actually reported (incl. weekends), minus leave days.
+  const submitted = cycle.filter((d) => have.has(d) && !onLeave(ds, id, d)).length;
   const reportConsistency = expected ? clamp(pct(submitted, expected)) : 100;
 
   const total = tasks.length;
@@ -138,10 +141,11 @@ export function computeMetrics(ds: Dataset, user: User): EmployeeMetrics {
   const reports = uReports(ds, user.id);
   const tasks = uTasks(ds, user.id);
   const cycle = lastNDates(14);
-  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && !onLeave(ds, user.id, d));
+  const joined = user.createdAt.slice(0, 10);
+  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && d >= joined && !onLeave(ds, user.id, d));
   const expected = workdays.length;
   const have = new Set(reports.map((r) => r.date));
-  const submitted = workdays.filter((d) => have.has(d)).length;
+  const submitted = cycle.filter((d) => have.has(d) && !onLeave(ds, user.id, d)).length;
   const score = scoreBreakdown(ds, user.id);
   const today = todayStr();
 
