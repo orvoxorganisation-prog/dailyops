@@ -2,7 +2,7 @@
 // Productivity scoring & analytics — pure functions over real (serialized) data.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { format, getDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { clamp, pct } from "./format";
 import type {
   DailyReport,
@@ -24,11 +24,6 @@ const SCORE_WEIGHTS = {
 
 // Completing this many tasks within the 14-day cycle earns full "tasks done" marks.
 const TASKS_DONE_TARGET = 8;
-
-const isWeekday = (d: Date) => {
-  const g = getDay(d);
-  return g !== 0 && g !== 6;
-};
 
 export function lastNDates(n: number, end = new Date()): string[] {
   const out: string[] = [];
@@ -63,8 +58,8 @@ export function computeStreak(reports: DailyReport[], isOnLeave: (d: string) => 
   if (!have.has(format(cursor, "yyyy-MM-dd"))) cursor.setDate(cursor.getDate() - 1);
   for (let i = 0; i < 60; i++) {
     const key = format(cursor, "yyyy-MM-dd");
-    // Weekends and approved-leave days are skipped — they don't break the streak.
-    if (!isWeekday(cursor) || isOnLeave(key)) {
+    // Approved-leave days are skipped (don't break the streak). Every other day counts.
+    if (isOnLeave(key)) {
       cursor.setDate(cursor.getDate() - 1);
       continue;
     }
@@ -102,8 +97,8 @@ export function scoreBreakdown(ds: Dataset, id: string): ScoreBreakdown {
   const tasks = uTasks(ds, id);
   const cycle = lastNDates(14);
   const joined = (ds.users.find((u) => u.id === id)?.createdAt ?? "").slice(0, 10);
-  // Expected = weekdays since the member joined, excluding approved leave.
-  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && d >= joined && !onLeave(ds, id, d));
+  // Expected = every day since the member joined, excluding approved leave (weekends count).
+  const workdays = cycle.filter((d) => d >= joined && !onLeave(ds, id, d));
   const expected = workdays.length;
   const have = new Set(reports.map((r) => r.date));
   // Credit every cycle day the member actually reported (incl. weekends), minus leave days.
@@ -142,7 +137,7 @@ export function computeMetrics(ds: Dataset, user: User): EmployeeMetrics {
   const tasks = uTasks(ds, user.id);
   const cycle = lastNDates(14);
   const joined = user.createdAt.slice(0, 10);
-  const workdays = cycle.filter((d) => isWeekday(parseISO(d)) && d >= joined && !onLeave(ds, user.id, d));
+  const workdays = cycle.filter((d) => d >= joined && !onLeave(ds, user.id, d));
   const expected = workdays.length;
   const have = new Set(reports.map((r) => r.date));
   const submitted = cycle.filter((d) => have.has(d) && !onLeave(ds, user.id, d)).length;
@@ -234,7 +229,7 @@ export interface RangeKpis {
 }
 
 /** Period-aware company metrics for an inclusive [fromISO, toISO] date range.
- *  Expected counts only weekdays, members who existed, and excludes approved leave. */
+ *  Expected counts every day since members existed, and excludes approved leave. */
 export function companyKpisForRange(ds: Dataset, fromISO: string, toISO: string): RangeKpis {
   const team = reportingUsers(ds);
   const teamIds = new Set(team.map((u) => u.id));
@@ -243,7 +238,6 @@ export function companyKpisForRange(ds: Dataset, fromISO: string, toISO: string)
 
   let expected = 0;
   for (const d of datesBetween(fromISO, toISO)) {
-    if (!isWeekday(parseISO(d))) continue;
     for (const u of team) {
       if (u.createdAt.slice(0, 10) <= d && !onLeave(ds, u.id, d)) expected++;
     }
@@ -270,12 +264,11 @@ export interface TrendPoint {
 export function missedReportTrend(ds: Dataset, days = 14): TrendPoint[] {
   const team = reportingUsers(ds);
   return lastNDates(days).map((d) => {
-    const weekday = isWeekday(parseISO(d));
     // Members who existed and were NOT on approved leave that day — leave days
     // aren't counted as missed, and pre-creation days aren't counted at all.
     const dueUsers = team.filter((u) => u.createdAt.slice(0, 10) <= d && !onLeave(ds, u.id, d));
     const dueIds = new Set(dueUsers.map((u) => u.id));
-    const expected = weekday ? dueUsers.length : 0;
+    const expected = dueUsers.length;
     const submitted = ds.reports.filter((r) => r.date === d && dueIds.has(r.userId)).length;
     return { date: d, value: expected ? clamp(pct(submitted, expected)) : 0, submitted, expected };
   });
